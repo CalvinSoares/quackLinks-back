@@ -1,13 +1,9 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { FastifyReply, FastifyRequest } from "fastify";
 import { AudioService } from "./audios.service";
 import { CreateAudioInput, UpdateAudioInput } from "./audio.schema";
 
 export class AudioController {
-  private audioService: AudioService;
-
-  constructor(fastify: FastifyInstance) {
-    this.audioService = new AudioService(fastify.prisma);
-  }
+  constructor(private audioService: AudioService) {}
 
   createAudioHandler = async (
     req: FastifyRequest<{ Body: CreateAudioInput }>,
@@ -17,7 +13,6 @@ export class AudioController {
       const audio = await this.audioService.create(req.user.id, req.body);
       return reply.code(201).send(audio);
     } catch (error: any) {
-      // Exemplo de tratamento de erro específico
       if (error.message.includes("Limite")) {
         return reply.code(403).send({ message: error.message });
       }

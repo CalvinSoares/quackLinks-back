@@ -24,15 +24,12 @@ const updateUserBodySchema = z.object({
   email: z.email().optional(),
 });
 
-// Schema para os parâmetros de rota (ex: /users/:id)
 const userIdParamSchema = z.object({
   id: z.uuid({ message: "O ID do usuário deve ser um UUID válido." }),
 });
 
-// Tipos inferidos para uso no controller
 export type UpdateUserInput = z.infer<typeof updateUserBodySchema>;
 
-// Schemas completos para as rotas
 export const updateUserSchema = {
   body: updateUserBodySchema,
   params: userIdParamSchema,
@@ -42,10 +39,8 @@ export const userIdSchema = {
   params: userIdParamSchema,
 };
 
-// Exportando os schemas que serão movidos para o módulo de auth
 export * from "../auth/auth.schema";
 
-// Isso ajuda na tipagem do request.body no controller
 export type RegisterUserInput = z.infer<typeof registerUserBodySchema>;
 export type LoginInput = z.infer<typeof loginBodySchema>;
 
@@ -57,10 +52,9 @@ const updateEmailBodySchema = z
   })
   .refine((data) => data.newEmail === data.confirmNewEmail, {
     message: "Os novos e-mails não coincidem.",
-    path: ["confirmNewEmail"], // Erro será associado a este campo
+    path: ["confirmNewEmail"],
   });
 
-// Schema para atualizar senha
 const updatePasswordBodySchema = z
   .object({
     currentPassword: z.string(),

@@ -1,74 +1,86 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { IPageRepository } from "../pages/pages.repository";
+import { ILinkRepository } from "./links.repository";
 import {
   CreateLinkInput,
   ReorderLinkInput,
   UpdateLinkInput,
 } from "./links.schema";
 
+export class PageNotFoundError extends Error {
+  constructor() {
+    super("Página do usuário não encontrada.");
+  }
+}
+export class LinkNotFoundError extends Error {
+  constructor() {
+    super("Link não encontrado ou não pertence a você.");
+  }
+}
+export class PermissionDeniedError extends Error {
+  constructor() {
+    super("Permissão negada: um ou mais links não pertencem a este usuário.");
+  }
+}
+
 export class LinkService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private linkRepository: ILinkRepository,
+    private pageRepository: IPageRepository
+  ) {}
 
   async createLink(userId: string, data: CreateLinkInput) {
-    const page = await this.prisma.page.findUnique({
-      where: { userId },
-      select: { id: true },
-    });
-    if (!page) throw new Error("Página do usuário não encontrada.");
+    const page = await this.pageRepository.findByUserId(userId);
+    if (!page) throw new PageNotFoundError();
 
-    const linkCount = await this.prisma.link.count({
-      where: { pageId: page.id },
-    });
+    const linkCount = await this.linkRepository.countByPageId(page.id);
 
-    return this.prisma.link.create({
-      data: {
-        ...data,
-        pageId: page.id,
-        order: linkCount, // Adiciona o novo link no final da lista
-      },
+    return this.linkRepository.create(page.id, {
+      ...data,
+      order: linkCount,
     });
   }
 
-  // Atualiza um link, garantindo que ele pertence ao usuário logado
   async updateLink(userId: string, linkId: string, data: UpdateLinkInput) {
-    // A query aninhada `page: { userId }` garante a permissão
-    return this.prisma.link.update({
-      where: { id: linkId, page: { userId } },
-      data,
-    });
+    try {
+      return await this.linkRepository.updateByUserId(linkId, userId, data);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2025"
+      ) {
+        throw new LinkNotFoundError();
+      }
+      throw error;
+    }
   }
 
-  // Deleta um link, garantindo que ele pertence ao usuário logado
   async deleteLink(userId: string, linkId: string) {
-    return this.prisma.link.delete({
-      where: { id: linkId, page: { userId } },
-    });
+    try {
+      await this.linkRepository.deleteByUserId(linkId, userId);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2025"
+      ) {
+        throw new LinkNotFoundError();
+      }
+      throw error;
+    }
   }
 
-  // Reordena os links em uma única transação
   async reorderLinks(userId: string, updates: ReorderLinkInput) {
-    // Validação: Garante que todos os IDs de link fornecidos realmente pertencem ao usuário
-    const userLinks = await this.prisma.link.findMany({
-      where: { page: { userId } },
-      select: { id: true },
-    });
+    // Lógica de negócio: Validar que todos os links pertencem ao usuário
+    const userLinks = await this.linkRepository.findByUserId(userId);
     const userLinkIds = new Set(userLinks.map((link) => link.id));
     const allUpdatesAreValid = updates.every((update) =>
       userLinkIds.has(update.id)
     );
 
     if (!allUpdatesAreValid) {
-      throw new Error(
-        "Permissão negada: um ou mais links não pertencem a este usuário."
-      );
+      throw new PermissionDeniedError();
     }
 
-    const updatePromises = updates.map((update) =>
-      this.prisma.link.update({
-        where: { id: update.id },
-        data: { order: update.order },
-      })
-    );
-
-    return this.prisma.$transaction(updatePromises);
+    await this.linkRepository.reorder(updates);
   }
 }

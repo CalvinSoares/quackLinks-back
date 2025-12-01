@@ -1,7 +1,28 @@
-import { PrismaClient, User } from "@prisma/client";
-import { UserService } from "../users/user.service";
+import { User } from "@prisma/client";
+import bcrypt from "bcrypt";
 import axios from "axios";
-import { FastifyInstance } from "fastify";
+import {
+  EmailInUseError,
+  IncorrectPasswordError,
+  UserNotFoundError,
+} from "../users/user.service";
+import { IUserRepository } from "../users/user.repository";
+import { IAuthRepository } from "./auth.repository";
+import { LoginInput, RegisterUserInput, VerifyEmailInput } from "./auth.schema";
+import { randomInt } from "crypto";
+import { sendVerificationEmail } from "../../plugins/email";
+import { IAccountRepository } from "./account.repository";
+
+export class UnverifiedEmailError extends Error {
+  constructor() {
+    super("Por favor, verifique seu e-mail antes de fazer login.");
+  }
+}
+export class InvalidTokenError extends Error {
+  constructor() {
+    super("Código inválido ou expirado.");
+  }
+}
 
 interface DiscordTokenResponse {
   access_token: string;
@@ -25,18 +46,69 @@ function getDiscordAvatarUrl(
 }
 
 export class AuthService {
-  private userService: UserService;
+  constructor(
+    private userRepository: IUserRepository,
+    private authRepository: IAuthRepository,
+    private accountRepository: IAccountRepository
+  ) {}
 
-  constructor(private prisma: PrismaClient) {
-    this.userService = new UserService(prisma);
+  async register(input: RegisterUserInput): Promise<void> {
+    const existingUser = await this.userRepository.findByEmail(input.email);
+    if (existingUser) {
+      throw new EmailInUseError();
+    }
+
+    const hashedPassword = await bcrypt.hash(input.password, 10);
+    const user = await this.userRepository.create({
+      email: input.email,
+      name: input.name,
+      password: hashedPassword,
+    });
+
+    const token = randomInt(100000, 999999).toString();
+    const expires = new Date(Date.now() + 15 * 60 * 1000);
+
+    await this.authRepository.createVerificationToken(user.id, token, expires);
+    await sendVerificationEmail(user.email!, token);
   }
 
-  // Lógica do callback do Discord
+  async login(input: LoginInput): Promise<User> {
+    const user = await this.userRepository.findByEmail(input.email);
+    if (!user || !user.password) {
+      throw new IncorrectPasswordError();
+    }
+    if (!user.emailVerified) {
+      throw new UnverifiedEmailError();
+    }
+
+    const isMatch = await bcrypt.compare(input.password, user.password);
+    if (!isMatch) {
+      throw new IncorrectPasswordError();
+    }
+    return user;
+  }
+
+  async verifyEmail(input: VerifyEmailInput): Promise<void> {
+    const user = await this.userRepository.findByEmail(input.email);
+    if (!user) {
+      throw new UserNotFoundError();
+    }
+
+    const verificationToken = await this.authRepository.findVerificationToken(
+      user.id,
+      input.token
+    );
+    if (!verificationToken || verificationToken.expires < new Date()) {
+      throw new InvalidTokenError();
+    }
+
+    await this.userRepository.update(user.id, { emailVerified: new Date() });
+    await this.authRepository.deleteVerificationToken(verificationToken.id);
+  }
+
   async handleDiscordCallback(
-    code: string,
-    server: FastifyInstance
-  ): Promise<{ token: string; isNewUser: boolean }> {
-    // 1. Trocar código por access token
+    code: string
+  ): Promise<{ user: User; isNewUser: boolean }> {
     const tokenParams = new URLSearchParams({
       client_id: process.env.DISCORD_CLIENT_ID!,
       client_secret: process.env.DISCORD_CLIENT_SECRET!,
@@ -52,7 +124,6 @@ export class AuthService {
     );
     const accessToken = tokenRes.data.access_token;
 
-    // 2. Obter informações do usuário do Discord
     const userRes = await axios.get<DiscordUserResponse>(
       "https://discord.com/api/users/@me",
       { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -65,16 +136,10 @@ export class AuthService {
       discordUser.avatar
     );
 
-    // 3. Procurar se já existe uma conta vinculada
-    let account = await this.prisma.account.findUnique({
-      where: {
-        provider_providerAccountId: {
-          provider: "discord",
-          providerAccountId: discordUser.id,
-        },
-      },
-      include: { user: true },
-    });
+    const account = await this.accountRepository.findByProviderAccountId(
+      "discord",
+      discordUser.id
+    );
 
     let user: User;
     let isNewUser = false;
@@ -82,63 +147,41 @@ export class AuthService {
     if (account) {
       user = account.user;
 
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { discordAvatarUrl },
-      });
+      await this.userRepository.update(user.id, { discordAvatarUrl });
     } else {
-      // 4b. Nova conta, precisamos criar o usuário e a conta
       isNewUser = true;
+      let existingUser: User | null = null;
 
-      // Opcional: Verificar se já existe um usuário com este e-mail
       if (discordUser.email && discordUser.verified) {
-        const existingUserByEmail = await this.userService.findUserByEmail(
-          discordUser.email
-        );
-        if (existingUserByEmail) {
-          // Se já existe, apenas vincula a conta do Discord a ele
-          user = existingUserByEmail;
-        }
+        existingUser = await this.userRepository.findByEmail(discordUser.email);
       }
 
-      // Se nenhum usuário foi encontrado, cria um novo
-      if (!user!) {
-        user = await this.prisma.user.create({
-          data: {
-            name: discordUser.username,
-            email:
-              discordUser.email && discordUser.verified
-                ? discordUser.email
-                : null,
-            emailVerified:
-              discordUser.email && discordUser.verified ? new Date() : null,
-            discordAvatarUrl: discordAvatarUrl,
-          },
+      if (existingUser) {
+        user = existingUser;
+      } else {
+        const newPublicUser = await this.userRepository.create({
+          name: discordUser.username,
+          email:
+            discordUser.email && discordUser.verified
+              ? discordUser.email
+              : null,
+          emailVerified:
+            discordUser.email && discordUser.verified ? new Date() : null,
+          discordAvatarUrl: discordAvatarUrl,
         });
+
+        user = (await this.userRepository.findFullUserById(newPublicUser.id))!;
       }
 
-      // Cria o vínculo da conta
-      await this.prisma.account.create({
-        data: {
-          userId: user.id,
-          type: "oauth",
-          provider: "discord",
-          providerAccountId: discordUser.id,
-          access_token: accessToken,
-        },
+      await this.accountRepository.create({
+        userId: user.id,
+        type: "oauth",
+        provider: "discord",
+        providerAccountId: discordUser.id,
+        accessToken,
       });
     }
 
-    // 5. Gerar JWT e retornar
-    const payload = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    };
-
-    const token = await server.jwt.sign(payload);
-
-    return { token, isNewUser };
+    return { user, isNewUser };
   }
 }

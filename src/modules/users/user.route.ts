@@ -10,7 +10,7 @@ import {
 
 const userRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
-  const userController = new UserController(server);
+  const userController = new UserController(server.userService);
 
   // Aplica o hook de autenticação a TODAS as rotas deste plugin
   server.addHook("onRequest", server.authenticate);

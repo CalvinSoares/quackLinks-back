@@ -9,7 +9,7 @@ import {
 
 const authRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
-  const authController = new AuthController(server);
+  const authController = new AuthController(server.authService);
 
   server.get("/discord", authController.discordLoginHandler);
   server.get("/discord/callback", authController.discordCallbackHandler);

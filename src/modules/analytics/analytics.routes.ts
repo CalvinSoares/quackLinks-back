@@ -8,7 +8,7 @@ const analyticsRoutes: FastifyPluginAsync = async (
   opts
 ): Promise<void> => {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
-  const analyticsController = new AnalyticsController(server);
+  const analyticsController = new AnalyticsController(server.analyticsService);
 
   server.register(async (privateRoutes) => {
     privateRoutes.addHook("onRequest", privateRoutes.authenticate);

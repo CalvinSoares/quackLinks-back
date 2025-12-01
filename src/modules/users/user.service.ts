@@ -1,4 +1,3 @@
-import { PrismaClient } from "@prisma/client";
 import {
   RegisterUserInput,
   UpdateEmailInput,
@@ -6,162 +5,117 @@ import {
   UpdateUserInput,
 } from "./user.schema";
 import bcrypt from "bcrypt";
-import { FastifyReply } from "fastify";
+
+import { PublicUser, UserRepository } from "./user.repository";
+
+export class UserNotFoundError extends Error {
+  constructor() {
+    super("Usuário não encontrado.");
+  }
+}
+export class IncorrectPasswordError extends Error {
+  constructor() {
+    super("Senha atual incorreta.");
+  }
+}
+export class EmailInUseError extends Error {
+  constructor() {
+    super("Este e-mail já está em uso.");
+  }
+}
+export class ExternalProviderLoginError extends Error {
+  constructor() {
+    super("Este usuário deve fazer login com um provedor externo.");
+  }
+}
 
 export class UserService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private userRepository: UserRepository) {}
 
-  // Criar (usado pelo módulo de auth)
   async createUser(input: RegisterUserInput) {
     const hashedPassword = await bcrypt.hash(input.password, 10);
-    return this.prisma.user.create({
-      data: {
-        email: input.email,
-        name: input.name,
-        password: hashedPassword,
-      },
+    return this.userRepository.create({
+      email: input.email,
+      name: input.name,
+      password: hashedPassword,
     });
   }
 
   async unlinkDiscordAccount(userId: string) {
-    // 1. Deleta a entrada na tabela 'Account'
-    await this.prisma.account.deleteMany({
-      where: {
-        userId: userId,
-        provider: "discord",
-      },
-    });
+    await this.userRepository.deleteDiscordAccount(userId);
 
-    // 2. Limpa os campos relacionados no modelo 'User'
-    const updatedUser = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        discordAvatarUrl: null,
-        useDiscordAvatar: false,
-      },
-    });
+    const updatedUser = await this.userRepository.findById(userId);
 
+    if (!updatedUser) throw new UserNotFoundError();
     return updatedUser;
   }
 
-  // Encontrar por e-mail (usado pelo módulo de auth)
   async findUserByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+    return this.userRepository.findByEmail(email);
   }
 
-  // Encontrar por ID
-  async findUserById(id: string) {
-    return this.prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        createdAt: true,
-        updatedAt: true,
-        useDiscordAvatar: true,
-        discordAvatarUrl: true,
-        role: true,
-      },
-    });
+  async findUserById(id: string): Promise<PublicUser | null> {
+    return this.userRepository.findById(id);
   }
 
-  // Listar todos os usuários
-  async findUsers() {
-    return this.prisma.user.findMany({
-      select: { id: true, email: true, name: true, createdAt: true }, // Nunca retornar a senha
-    });
+  async findUsers(): Promise<PublicUser[]> {
+    return this.userRepository.findAll();
   }
 
-  // Atualizar usuário
-  async updateUser(id: string, data: UpdateUserInput) {
-    return this.prisma.user.update({
-      where: { id },
-      data,
-      select: { id: true, email: true, name: true, createdAt: true },
-    });
+  async updateUser(id: string, data: UpdateUserInput): Promise<PublicUser> {
+    return this.userRepository.update(id, data);
   }
 
   async updateUserEmail(
     userId: string,
-    input: UpdateEmailInput,
-    reply: FastifyReply
-  ) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      return reply.code(404).send({ message: "Usuário não encontrado." });
-    }
-
-    if (!user.password) {
-      return reply.code(401).send({
-        message:
-          "Este usuário deve fazer login com um provedor externo (ex: Discord).",
-      });
-    }
+    input: UpdateEmailInput
+  ): Promise<PublicUser> {
+    // O repositório precisa retornar o usuário completo aqui para a verificação de senha
+    const user = await this.userRepository.findByEmail(input.newEmail);
+    if (!user) throw new UserNotFoundError();
+    if (!user.password) throw new ExternalProviderLoginError();
 
     const isPasswordMatch = await bcrypt.compare(
       input.currentPassword,
       user.password
     );
-    if (!isPasswordMatch) {
-      return reply.code(401).send({ message: "Senha atual incorreta." });
+    if (!isPasswordMatch) throw new IncorrectPasswordError();
+
+    const existingUserWithNewEmail = await this.userRepository.findByEmail(
+      input.newEmail
+    );
+    if (existingUserWithNewEmail && existingUserWithNewEmail.id !== userId) {
+      throw new EmailInUseError();
     }
 
-    // Verifica se o novo e-mail já está em uso
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: input.newEmail },
-    });
-    if (existingUser && existingUser.id !== userId) {
-      return reply.code(409).send({ message: "Este e-mail já está em uso." });
-    }
-
-    // Atualiza o e-mail e marca como não verificado
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        email: input.newEmail,
-        emailVerified: null, // Força a reverificação do novo e-mail
-      },
+    return this.userRepository.update(userId, {
+      email: input.newEmail,
+      emailVerified: null, // Força reverificação
     });
   }
 
   async updateUserPassword(
     userId: string,
-    input: UpdatePasswordInput,
-    reply: FastifyReply
-  ) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      return reply.code(404).send({ message: "Usuário não encontrado." });
-    }
+    input: UpdatePasswordInput
+  ): Promise<void> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) throw new UserNotFoundError();
 
-    if (!user.password) {
-      return reply.code(401).send({
-        message:
-          "Este usuário deve fazer login com um provedor externo (ex: Discord).",
-      });
-    }
+    // Rebuscamos o usuário completo para obter a hash da senha
+    const fullUser = await this.userRepository.findByEmail(user.email!);
+    if (!fullUser?.password) throw new ExternalProviderLoginError();
 
     const isPasswordMatch = await bcrypt.compare(
       input.currentPassword,
-      user.password
+      fullUser.password
     );
-    if (!isPasswordMatch) {
-      return reply.code(401).send({ message: "Senha atual incorreta." });
-    }
+    if (!isPasswordMatch) throw new IncorrectPasswordError();
 
     const hashedNewPassword = await bcrypt.hash(input.newPassword, 10);
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedNewPassword },
-    });
+    await this.userRepository.update(userId, { password: hashedNewPassword });
   }
 
-  // Deletar usuário
-  async deleteUser(id: string) {
-    return this.prisma.user.delete({
-      where: { id },
-      select: { id: true, email: true, name: true },
-    });
+  async deleteUser(id: string): Promise<PublicUser> {
+    return this.userRepository.deleteById(id);
   }
 }

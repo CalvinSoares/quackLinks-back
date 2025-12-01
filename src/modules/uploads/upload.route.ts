@@ -8,12 +8,10 @@ const uploadRoutes: FastifyPluginAsync = async (
   opts
 ): Promise<void> => {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
-  const uploadController = new UploadController(server);
+  const uploadController = new UploadController(server.uploadService);
 
-  // Esta rota é privada e requer autenticação
   server.addHook("onRequest", server.authenticate);
 
-  // Rota para solicitar a URL de upload
   server.post(
     "/signed-url",
     { schema: createSignedUrlSchema },

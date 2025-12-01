@@ -2,7 +2,6 @@ import { z } from "zod";
 
 const linkIdParams = z.object({ linkId: z.uuid() });
 
-// Schema para criar um novo link
 const createLinkBodySchema = z.object({
   title: z.string().min(1),
   url: z.url({ message: "URL inválida." }),
@@ -15,7 +14,6 @@ export const createLinkSchema = {
 };
 export type CreateLinkInput = z.infer<typeof createLinkBodySchema>;
 
-// Schema para atualizar um link
 const updateLinkBodySchema = z.object({
   title: z.string().min(1).optional(),
   url: z.url({ message: "URL inválida." }).optional(),
@@ -28,12 +26,10 @@ export const updateLinkSchema = {
 };
 export type UpdateLinkInput = z.infer<typeof updateLinkBodySchema>;
 
-// Schema para deletar um link
 export const deleteLinkSchema = {
   params: linkIdParams,
 };
 
-// Schema para reordenar links
 const reorderLinksBodySchema = z.array(
   z.object({
     id: z.uuid(),
