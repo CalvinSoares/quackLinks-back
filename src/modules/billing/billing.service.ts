@@ -1,61 +1,58 @@
-import { PrismaClient } from "@prisma/client";
 import Stripe from "stripe";
+import { IUserRepository } from "../users/user.repository";
 
-// Inicialize o Stripe com sua chave secreta (do .env)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
+export class UserNotFoundError extends Error {
+  constructor() {
+    super("Usuário não encontrado.");
+  }
+}
+
 export class BillingService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private userRepository: IUserRepository) {}
 
-  // Busca ou cria um cliente no Stripe para um usuário do seu app
   private async getOrCreateStripeCustomer(userId: string, email: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const user = await this.userRepository.findById(userId);
+    if (!user) throw new UserNotFoundError();
+    if (user.stripeCustomerId) return user.stripeCustomerId;
 
-    if (!user) throw new Error("Usuário não encontrado.");
-
-    // Se o usuário já tem um ID do Stripe, retorna ele
-    if (user.stripeCustomerId) {
-      return user.stripeCustomerId;
-    }
-
-    // Se não, cria um novo cliente no Stripe
     const customer = await stripe.customers.create({
-      email: email,
-      metadata: {
-        userId: userId, // Linka o cliente do Stripe ao seu usuário
-      },
+      email,
+      metadata: { userId },
     });
-
-    // Salva o novo ID no seu banco de dados
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { stripeCustomerId: customer.id },
-    });
-
+    await this.userRepository.update(userId, { stripeCustomerId: customer.id });
     return customer.id;
   }
 
-  // Cria uma sessão de checkout para o usuário comprar o plano Premium
   async createCheckoutSession(userId: string, email: string) {
     const customerId = await this.getOrCreateStripeCustomer(userId, email);
-    const priceId = process.env.STRIPE_PREMIUM_PRICE_ID!; // ID do preço do seu produto no Stripe
+    const priceId = process.env.STRIPE_PREMIUM_PRICE_ID!;
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card", "boleto", "pix"], // Adiciona PIX!
-      mode: "payment", // Para pagamentos únicos (Lifetime)
+      payment_method_types: ["card", "boleto", "pix"],
+      mode: "payment",
       customer: customerId,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      success_url: `${process.env.FRONTEND_URL}/dashboard/overview?payment=success`,
-      cancel_url: `${process.env.FRONTEND_URL}/dashboard/overview?payment=cancel`,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${process.env.FRONTEND_URL}/dashboard?payment=success`,
+      cancel_url: `${process.env.FRONTEND_URL}/dashboard?payment=cancel`,
     });
-
     return { url: session.url };
+  }
+
+  async handleWebhookEvent(event: Stripe.Event) {
+    switch (event.type) {
+      case "checkout.session.completed":
+        const session = event.data.object as Stripe.Checkout.Session;
+        const customerId = session.customer as string;
+
+        await this.userRepository.updateByStripeCustomerId(customerId, {
+          role: "PREMIUM",
+        });
+        console.log(`User with Stripe ID ${customerId} is now PREMIUM.`);
+        break;
+      default:
+        console.log(`Unhandled webhook event type: ${event.type}`);
+    }
   }
 }

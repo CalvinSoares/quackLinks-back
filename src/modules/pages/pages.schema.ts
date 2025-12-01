@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-// Schema para buscar uma página pública pelo slug
 export const getPageBySlugSchema = {
   params: z.object({
     slug: z.string(),
@@ -18,7 +17,6 @@ const titleEffectsEnum = z.enum([
   "glitch",
 ]);
 
-// Schema para atualizar os dados da página do usuário logado
 const updatePageBodySchema = z.object({
   slug: z
     .string()

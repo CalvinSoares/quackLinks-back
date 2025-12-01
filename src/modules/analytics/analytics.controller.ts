@@ -1,20 +1,15 @@
-import { FastifyRequest, FastifyReply, FastifyInstance } from "fastify";
+import { FastifyRequest, FastifyReply } from "fastify";
 import { AnalyticsService } from "./analytics.service";
 import { TimePeriod } from "./analytics.schema";
 
 export class AnalyticsController {
-  private analyticsService: AnalyticsService;
-
-  constructor(fastify: FastifyInstance) {
-    this.analyticsService = new AnalyticsService(fastify.prisma);
-  }
+  constructor(private analyticsService: AnalyticsService) {}
 
   getMyPageAnalyticsHandler = async (
     req: FastifyRequest<{ Querystring: { period: TimePeriod } }>,
     reply: FastifyReply
   ) => {
     try {
-      // req.user.id vem do hook de autenticação
       const analyticsData = await this.analyticsService.getAnalyticsForUser(
         req.user.id,
         req.query.period

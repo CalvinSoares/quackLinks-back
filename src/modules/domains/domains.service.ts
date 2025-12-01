@@ -1,12 +1,12 @@
-import { PrismaClient } from "@prisma/client";
 import { promises as dns } from "node:dns";
+import { IDomainRepository } from "./domains.repository";
 
 const APP_TARGET_DOMAIN = process.env.APP_DOMAIN!;
 
 const domainRegex = /^(?!-)[A-Za-z0-9-]+([\-\.]{1}[a-z0-9]+)*\.[A-Za-z]{2,6}$/;
 
 export class DomainService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private domainRepository: IDomainRepository) {}
 
   private normalizeDomain(domain: string): string {
     return domain
@@ -17,7 +17,7 @@ export class DomainService {
   }
 
   async getMyDomain(userId: string) {
-    return this.prisma.customDomain.findUnique({ where: { userId } });
+    return this.domainRepository.findByUserId(userId);
   }
 
   async addDomain(userId: string, domain: string) {
@@ -27,41 +27,31 @@ export class DomainService {
       throw new Error("Formato de domínio inválido.");
     }
 
-    // VERIFICAÇÃO 1: O usuário já tem um domínio?
-    const existingUserDomain = await this.prisma.customDomain.findUnique({
-      where: { userId },
-    });
+    const existingUserDomain = await this.domainRepository.findByUserId(userId);
     if (existingUserDomain) {
       throw new Error(
         "Você já possui um domínio configurado. Remova o atual para adicionar um novo."
       );
     }
 
-    // VERIFICAÇÃO 2: O domínio já está em uso por outra pessoa?
-    const domainInUse = await this.prisma.customDomain.findUnique({
-      where: { domain: normalizedDomain },
-    });
+    const domainInUse = await this.domainRepository.findByDomain(
+      normalizedDomain
+    );
     if (domainInUse) {
       throw new Error("Este domínio já está em uso por outro usuário.");
     }
 
-    return this.prisma.customDomain.create({
-      data: { userId, domain: normalizedDomain },
-    });
+    return this.domainRepository.create(userId, normalizedDomain);
   }
 
   async removeDomain(userId: string) {
-    return this.prisma.customDomain.delete({
-      where: { userId },
-    });
+    return this.domainRepository.deleteByUserId(userId);
   }
 
   async verifyDomain(
     userId: string
   ): Promise<{ success: boolean; message: string }> {
-    const customDomain = await this.prisma.customDomain.findUnique({
-      where: { userId },
-    });
+    const customDomain = await this.domainRepository.findByUserId(userId);
 
     if (!customDomain) {
       return { success: false, message: "Nenhum domínio configurado." };
@@ -70,10 +60,7 @@ export class DomainService {
     try {
       const cnameRecords = await dns.resolveCname(customDomain.domain);
       if (cnameRecords.includes(APP_TARGET_DOMAIN)) {
-        await this.prisma.customDomain.update({
-          where: { userId },
-          data: { verified: true },
-        });
+        await this.domainRepository.update(userId, { verified: true });
         return { success: true, message: "Domínio verificado com sucesso!" };
       } else {
         return {

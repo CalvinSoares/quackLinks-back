@@ -8,6 +8,7 @@ import {
 import fastifyCors from "@fastify/cors";
 import { FastifyJWT } from "@fastify/jwt";
 import fastifyRawBody from "fastify-raw-body";
+import dependencies from "./plugins/dependencies";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
@@ -27,14 +28,12 @@ declare module "@fastify/jwt" {
 
 declare module "fastify" {
   export interface FastifyInstance {
-    // Adiciona a função 'authenticate' à instância do Fastify
     authenticate: (
       request: FastifyRequest,
       reply: FastifyReply
     ) => Promise<void>;
   }
   export interface FastifyRequest {
-    // Adiciona 'user' ao objeto de requisição, populado pelo jwtVerify
     user: FastifyJWT["user"];
   }
 }
@@ -42,7 +41,7 @@ declare module "fastify" {
 export interface AppOptions
   extends FastifyServerOptions,
     Partial<AutoloadPluginOptions> {}
-// Pass --options via CLI arguments in command to enable these options.
+
 const options: AppOptions = {
   ignoreTrailingSlash: true, // Adicione aqui
   logger: true,
@@ -61,11 +60,13 @@ const app: FastifyPluginAsync<AppOptions> = async (
   });
 
   await fastify.register(fastifyRawBody, {
-    field: "rawBody", // o nome da propriedade no request (pode ser qualquer nome)
-    global: false, // importante: não aplicar globalmente para não impactar performance
-    encoding: "utf8", // encoding esperado do Stripe
-    runFirst: true, // garante que ele rode antes do parser de JSON do Fastify
+    field: "rawBody",
+    global: false,
+    encoding: "utf8",
+    runFirst: true,
   });
+
+  void fastify.register(dependencies);
 
   void fastify.register(AutoLoad, {
     dir: join(__dirname, "plugins"),
@@ -74,8 +75,8 @@ const app: FastifyPluginAsync<AppOptions> = async (
 
   void fastify.register(AutoLoad, {
     dir: join(__dirname, "modules"),
-    options: { prefix: "/api/v1", ...opts }, // Exemplo: Adicionando um prefixo global para todas as rotas
-    dirNameRoutePrefix: true, // <-- MÁGICA ACONTECE AQUI!
+    options: { prefix: "/api/v1", ...opts },
+    dirNameRoutePrefix: true,
   });
 };
 

@@ -1,4 +1,4 @@
-import { FastifyRequest, FastifyReply, FastifyInstance } from "fastify";
+import { FastifyRequest, FastifyReply } from "fastify";
 import { LinkService } from "./links.service";
 import {
   CreateLinkInput,
@@ -8,11 +8,7 @@ import {
 import { Prisma } from "@prisma/client";
 
 export class LinkController {
-  private linkService: LinkService;
-
-  constructor(fastify: FastifyInstance) {
-    this.linkService = new LinkService(fastify.prisma);
-  }
+  constructor(private linkService: LinkService) {}
 
   createLinkHandler = async (
     req: FastifyRequest<{ Body: CreateLinkInput }>,

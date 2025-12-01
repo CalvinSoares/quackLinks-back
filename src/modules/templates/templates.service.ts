@@ -1,43 +1,56 @@
-import { Prisma, PrismaClient, TemplateVisibility } from "@prisma/client";
+import { Prisma, TemplateVisibility } from "@prisma/client";
 import { CreateTemplateInput, ListTemplatesQuery } from "./templates.schema";
+import { ITemplateRepository } from "./templates.repository";
+import { IPageRepository, PageWithDetails } from "../pages/pages.repository";
+
+export class TemplateNotFoundError extends Error {
+  constructor() {
+    super("Template não encontrado.");
+  }
+}
+export class PageNotFoundError extends Error {
+  constructor() {
+    super("Página do usuário não encontrada.");
+  }
+}
+export class InsufficientPermissionsError extends Error {
+  constructor() {
+    super("Permissões insuficientes.");
+  }
+}
 
 export class TemplateService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private templateRepository: ITemplateRepository,
+    private pageRepository: IPageRepository
+  ) {}
+
+  private buildPageData(page: PageWithDetails): Prisma.JsonObject {
+    return {
+      title: page.title,
+      bio: page.bio,
+      avatarUrl: page.avatarUrl,
+      backgroundUrl: page.backgroundUrl,
+      backgroundColor: page.backgroundColor,
+      location: page.location,
+      cursorUrl: page.cursorUrl,
+      theme: page.theme,
+    };
+  }
 
   async createTemplate(userId: string, data: CreateTemplateInput) {
-    // 1. Buscar a página atual do usuário para pegar os dados
-    const userPage = await this.prisma.page.findUnique({
-      where: { userId },
-    });
+    const userPage = await this.pageRepository.findByUserId(userId);
+    if (!userPage) throw new PageNotFoundError();
 
-    if (!userPage) {
-      throw new Error(
-        "Página do usuário não encontrada para criar o template."
-      );
-    }
+    const pageData = this.buildPageData(userPage);
 
-    // 2. Montar o objeto `pageData` com os campos relevantes
-    const pageData = {
-      title: userPage.title,
-      bio: userPage.bio,
-      avatarUrl: userPage.avatarUrl,
-      backgroundUrl: userPage.backgroundUrl,
-      backgroundColor: userPage.backgroundColor,
-      location: userPage.location,
-
-      cursorUrl: userPage.cursorUrl,
-      theme: userPage.theme,
-    };
-
-    // 3. Criar o template no banco
-    const template = await this.prisma.template.create({
+    return this.templateRepository.create({
       data: {
         name: data.name,
         previewImageUrl: data.previewImageUrl,
         visibility: data.visibility as TemplateVisibility,
         pageData: pageData,
-        creatorId: userId,
-        // Conecta ou cria as tags fornecidas
+        creator: { connect: { id: userId } },
         tags: {
           connectOrCreate: data.tags.map((tagName) => ({
             where: { name: tagName.toLowerCase() },
@@ -45,142 +58,80 @@ export class TemplateService {
           })),
         },
       },
-      include: {
-        creator: { select: { name: true } },
-        tags: true,
-      },
     });
-
-    return template;
   }
 
   async listUserTemplates(userId: string) {
-    const templates = await this.prisma.template.findMany({
-      where: {
-        creatorId: userId,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      include: {
-        creator: { select: { id: true, name: true } },
-        tags: { select: { name: true } },
-        _count: { select: { favoritedBy: true } },
-      },
-    });
-
-    return { templates };
+    return this.templateRepository.findUserTemplates(userId);
   }
 
   async listPublicTemplates(query: ListTemplatesQuery) {
     const { search, creatorName, tags, sortBy, page, limit } = query;
-    const where: Prisma.TemplateWhereInput = {
-      visibility: "PUBLIC",
-    };
+    const where: Prisma.TemplateWhereInput = { visibility: "PUBLIC" };
 
-    if (search) {
-      where.name = { contains: search, mode: "insensitive" };
-    }
-
-    if (creatorName) {
+    if (search) where.name = { contains: search, mode: "insensitive" };
+    if (creatorName)
       where.creator = { name: { contains: creatorName, mode: "insensitive" } };
-    }
+    if (tags)
+      where.tags = {
+        some: {
+          name: { in: tags.split(",").map((t) => t.trim().toLowerCase()) },
+        },
+      };
 
-    if (tags) {
-      const tagList = tags.split(",").map((t) => t.trim().toLowerCase());
-      where.tags = { some: { name: { in: tagList } } };
-    }
+    const orderBy: Prisma.TemplateOrderByWithRelationInput =
+      sortBy === "newest"
+        ? { createdAt: "desc" }
+        : sortBy === "oldest"
+        ? { createdAt: "asc" }
+        : { favoritedBy: { _count: "desc" } };
 
-    const orderBy: Prisma.TemplateOrderByWithRelationInput = {};
-    if (sortBy === "newest") {
-      orderBy.createdAt = "desc";
-    } else if (sortBy === "oldest") {
-      orderBy.createdAt = "asc";
-    } else {
-      // 'popular' é o default
-      orderBy.favoritedBy = { _count: "desc" };
-    }
-
-    const templates = await this.prisma.template.findMany({
-      where,
-      orderBy,
-      skip: (page - 1) * limit,
-      take: limit,
-      include: {
-        creator: { select: { id: true, name: true } },
-        tags: { select: { name: true } },
-        _count: { select: { favoritedBy: true } }, // Conta quantos favoritos tem
-      },
-    });
-
-    const total = await this.prisma.template.count({ where });
+    const [templates, total] = await Promise.all([
+      this.templateRepository.findPublicTemplates({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.templateRepository.countPublicTemplates(where),
+    ]);
 
     return { templates, total, page, limit };
   }
 
   async getTemplateById(id: string) {
-    return this.prisma.template.findFirst({
-      where: { id, visibility: "PUBLIC" },
-      include: {
-        creator: { select: { id: true, name: true } },
-        tags: true,
-        _count: { select: { favoritedBy: true } },
-      },
-    });
+    return this.templateRepository.findPublicById(id);
   }
 
   async applyTemplate(userId: string, templateId: string) {
-    const template = await this.prisma.template.findUnique({
-      where: { id: templateId },
-    });
-
-    if (!template) {
-      throw new Error("Template não encontrado.");
-    }
-    // Garante que o pageData seja um objeto válido antes de aplicar
-    if (typeof template.pageData !== "object" || template.pageData === null) {
+    const template = await this.templateRepository.findById(templateId);
+    if (!template) throw new TemplateNotFoundError();
+    if (typeof template.pageData !== "object" || template.pageData === null)
       throw new Error("Dados do template inválidos.");
-    }
 
     const dataToUpdate = template.pageData as Prisma.JsonObject;
-
-    return this.prisma.page.update({
-      where: { userId },
-      data: {
-        title: dataToUpdate.title as string | undefined,
-        bio: dataToUpdate.bio as string | undefined,
-        avatarUrl: dataToUpdate.avatarUrl as string | undefined,
-        backgroundUrl: dataToUpdate.backgroundUrl as string | undefined,
-        backgroundColor: dataToUpdate.backgroundColor as string | undefined,
-        location: dataToUpdate.location as string | undefined,
-
-        cursorUrl: dataToUpdate.cursorUrl as string | undefined,
-        theme: dataToUpdate.theme as string | undefined,
-      },
-    });
+    return this.pageRepository.update(userId, dataToUpdate);
   }
 
   async favoriteTemplate(userId: string, templateId: string) {
-    // Usamos upsert para evitar erro se o registro já existir
-    return this.prisma.userFavoriteTemplate.upsert({
-      where: { userId_templateId: { userId, templateId } },
-      create: { userId, templateId },
-      update: {},
-    });
+    await this.templateRepository.favorite(userId, templateId);
   }
 
   async unfavoriteTemplate(userId: string, templateId: string) {
-    return this.prisma.userFavoriteTemplate.delete({
-      where: { userId_templateId: { userId, templateId } },
-    });
+    await this.templateRepository.unfavorite(userId, templateId);
   }
 
   async deleteTemplate(userId: string, templateId: string) {
-    return this.prisma.template.delete({
-      where: {
-        id: templateId,
-        creatorId: userId,
-      },
-    });
+    try {
+      await this.templateRepository.deleteByIdAndCreator(templateId, userId);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2025"
+      ) {
+        throw new InsufficientPermissionsError();
+      }
+      throw error;
+    }
   }
 }

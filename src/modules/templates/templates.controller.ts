@@ -1,16 +1,9 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { FastifyReply, FastifyRequest } from "fastify";
 import { TemplateService } from "./templates.service";
 import { CreateTemplateInput, ListTemplatesQuery } from "./templates.schema";
-import { Prisma } from "@prisma/client";
 
 export class TemplateController {
-  private templateService: TemplateService;
-
-  constructor(fastify: FastifyInstance) {
-    this.templateService = new TemplateService(fastify.prisma);
-  }
-
-  // POST /templates
+  constructor(private templateService: TemplateService) {}
   createTemplateHandler = async (
     req: FastifyRequest<{ Body: CreateTemplateInput }>,
     reply: FastifyReply
@@ -22,7 +15,6 @@ export class TemplateController {
       );
       return reply.code(201).send(template);
     } catch (error) {
-      // Log do erro real no servidor
       console.error(error);
       return reply
         .code(500)
@@ -35,7 +27,6 @@ export class TemplateController {
     reply: FastifyReply
   ) => {
     try {
-      // req.user.id vem do seu hook de autenticação
       const result = await this.templateService.listUserTemplates(req.user.id);
       return reply.send(result);
     } catch (error) {
@@ -46,7 +37,6 @@ export class TemplateController {
     }
   };
 
-  // GET /templates
   listTemplatesHandler = async (
     req: FastifyRequest<{ Querystring: ListTemplatesQuery }>,
     reply: FastifyReply
@@ -55,7 +45,6 @@ export class TemplateController {
     return result;
   };
 
-  // GET /templates/:id
   getTemplateHandler = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
@@ -67,7 +56,6 @@ export class TemplateController {
     return template;
   };
 
-  // POST /templates/:id/apply
   applyTemplateHandler = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
@@ -86,7 +74,6 @@ export class TemplateController {
     }
   };
 
-  // POST /templates/:id/favorite
   favoriteTemplateHandler = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
@@ -95,7 +82,6 @@ export class TemplateController {
     return reply.code(204).send();
   };
 
-  // DELETE /templates/:id/favorite
   unfavoriteTemplateHandler = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
@@ -104,15 +90,6 @@ export class TemplateController {
       await this.templateService.unfavoriteTemplate(req.user.id, req.params.id);
       return reply.code(204).send();
     } catch (error) {
-      // O Prisma lança um erro se o registro a ser deletado não existe
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2025"
-      ) {
-        return reply
-          .code(404)
-          .send({ message: "Registro de favorito não encontrado." });
-      }
       return reply
         .code(500)
         .send({ message: "Não foi possível remover o favorito." });
@@ -127,16 +104,6 @@ export class TemplateController {
       await this.templateService.deleteTemplate(req.user.id, req.params.id);
       return reply.code(204).send();
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2025"
-      ) {
-        return reply.code(404).send({
-          message:
-            "Template não encontrado ou você não tem permissão para excluí-lo.",
-        });
-      }
-
       console.error("Error deleting template:", error);
       return reply
         .code(500)

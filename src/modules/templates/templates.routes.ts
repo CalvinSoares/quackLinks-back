@@ -9,14 +9,10 @@ import {
   getTemplateSchema,
 } from "./templates.schema";
 
-const templateRoutes: FastifyPluginAsync = async (
-  fastify,
-  opts
-): Promise<void> => {
+const templateRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
-  const templateController = new TemplateController(server);
+  const templateController = new TemplateController(server.templateService);
 
-  // --- Rotas Públicas ---
   server.get(
     "/",
     { schema: listTemplatesSchema },
@@ -29,7 +25,6 @@ const templateRoutes: FastifyPluginAsync = async (
     templateController.getTemplateHandler
   );
 
-  // --- Rotas Privadas (requerem autenticação) ---
   server.register(async (privateRoutes) => {
     privateRoutes.addHook("onRequest", privateRoutes.authenticate);
 
@@ -39,11 +34,7 @@ const templateRoutes: FastifyPluginAsync = async (
       templateController.createTemplateHandler
     );
 
-    privateRoutes.get(
-      "/mine",
-      {}, // Não precisa de schema de validação para esta rota simples
-      templateController.listUserTemplatesHandler
-    );
+    privateRoutes.get("/mine", {}, templateController.listUserTemplatesHandler);
 
     privateRoutes.post(
       "/:id/apply",

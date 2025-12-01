@@ -15,9 +15,9 @@ enum UserRole {
 model Account {
   id                String  @id @default(uuid())
   userId            String
-  type              String // ex: "oauth"
-  provider          String // ex: "discord"
-  providerAccountId String // ID do usuário no Discord
+  type              String
+  provider          String
+  providerAccountId String
   access_token      String? @db.Text
   refresh_token     String? @db.Text
   expires_at        Int?
@@ -57,121 +57,90 @@ model User {
 }
 
 model Page {
-  id        String  @id @default(uuid())
-  slug      String  @unique // O nome de usuário público, ex: 'meunome' em seusite.com/meunome
-  title     String? // Título da página, ex: "Minhas Redes Sociais"
-  bio       String? // Uma pequena biografia
-  avatarUrl String? // URL da foto de perfil
-
-  showProfileCard    Boolean @default(true) // Controla a visibilidade do card
-  profileCardColor   String? // Cor do card, ex: #1f293780 (com transparência)
+  id                 String  @id @default(uuid())
+  slug               String  @unique
+  title              String?
+  bio                String?
+  avatarUrl          String?
+  showProfileCard    Boolean @default(true)
+  profileCardColor   String?
   profileCardOpacity Float   @default(0.2)
-
   useStandardIconColors Boolean @default(true)
-  glowEffect            String  @default("none")
-  // Contador de Visualizações
-  showViewCount         Boolean @default(true)
-
-  buttonStyle     String  @default("solid") // solid, outline, soft, glass
-  buttonRoundness String  @default("rounded-lg") // rounded-none, rounded-md, rounded-full
-  buttonShadow    Boolean @default(false)
-
-  // Layout
-  layoutType      String @default("standard") // standard, compact, grid
-  linkStyle       String @default("classic")
-  layoutLinkStyle String @default("list")
-
-  // Efeitos Visuais (VFX - O estilo guns.lol)
-  backgroundOverlay String? // "noise", "scanlines", "vignette", "none"
-  backgroundBlur    Int     @default(0) // Blur no fundo (0-20px)
-
-  // Custom CSS (Para usuários Premium/Avançados)
-  customCss      String? @db.Text
-  backgroundType String  @default("solid") // solid, gradient, image
-  titleEffect    String  @default("none")
-
-  // ADICIONADO: Campos para o gradiente
-  gradientDirection  String? // ex: 'to top right'
-  gradientColorA     String? // ex: '#ff0000'
-  gradientColorB     String? // ex: '#0000ff'
-  backgroundUrl      String? // URL de uma imagem de fundo
+  glowEffect         String  @default("none")
+  showViewCount      Boolean @default(true)
+  buttonStyle        String  @default("solid")
+  buttonRoundness    String  @default("rounded-lg")
+  buttonShadow       Boolean @default(false)
+  layoutType         String @default("standard")
+  linkStyle          String @default("classic")
+  layoutLinkStyle    String @default("list")
+  backgroundOverlay  String?
+  backgroundBlur     Int     @default(0)
+  customCss          String? @db.Text
+  backgroundType     String  @default("solid")
+  titleEffect        String  @default("none")
+  gradientDirection  String?
+  gradientColorA     String?
+  gradientColorB     String?
+  backgroundUrl      String?
   backgroundVideoUrl String?
-  backgroundColor    String? // Cor de fundo em hexadecimal, ex: "#FFFFFF"
-
-  // Para informações adicionais do perfil
-  location String? // Localização do usuário, ex: "São Paulo, Brasil"
-
-  cursorUrl String?
-
-  shuffleAudios   Boolean @default(false) // Opção para embaralhar os áudios
-  showAudioPlayer Boolean @default(true)
-
-  showAudioButton Boolean @default(true)
-  textColor       String?
-  iconColor       String?
-
-  profileRingType   String?  @default("none") // Opções: 'none', 'solid', 'gradient', 'animated'
-  profileRingColors String[] @default([])
-
-  theme     String @default("default") // Para customização de aparência
-  viewCount Int    @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // RELAÇÃO: A página pertence a UM usuário.
-  userId String @unique // Garante que um usuário só pode ter uma página
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // RELAÇÃO: Uma página pode ter MUITOS links.
-  links    Link[]
-  PageView PageView[]
-  audios   Audio[]
+  backgroundColor    String?
+  location           String?
+  cursorUrl          String?
+  shuffleAudios      Boolean @default(false)
+  showAudioPlayer    Boolean @default(true)
+  showAudioButton    Boolean @default(true)
+  textColor          String?
+  iconColor          String?
+  profileRingType    String?  @default("none")
+  profileRingColors  String[] @default([])
+  theme              String @default("default")
+  viewCount          Int    @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  userId             String @unique
+  user               User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links              Link[]
+  PageView           PageView[]
+  audios             Audio[]
 }
 
 model Audio {
-  id       String  @id @default(uuid())
-  title    String
-  url      String  @db.Text
-  coverUrl String? @db.Text
-  duration Int? // Duração em segundos, pode ser útil
-  order    Int     @default(0) // Para reordenação
-  isActive Boolean @default(false) // Apenas um áudio pode ser ativo por vez
-
+  id        String  @id @default(uuid())
+  title     String
+  url       String  @db.Text
+  coverUrl  String? @db.Text
+  duration  Int?
+  order     Int     @default(0)
+  isActive  Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  pageId String
-  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  pageId    String
+  page      Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
 }
 
 model Link {
   id         String @id @default(uuid())
-  title      String // O texto que aparece no botão do link
-  url        String // O URL de destino
-  order      Int    @default(0) // Para permitir reordenação dos links
-  clickCount Int    @default(0) // Para estatísticas de cliques
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  isActive    Boolean   @default(true) // Para ativar/desativar manualmente
-  scheduledAt DateTime? // Quando o link deve se tornar ativo
-  expiresAt   DateTime?
-
-  pageId    String
-  page      Page        @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  LinkClick LinkClick[]
+  title      String
+  url        String
+  order      Int    @default(0)
+  clickCount Int    @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  isActive   Boolean   @default(true)
+  scheduledAt DateTime?
+  expiresAt  DateTime?
+  pageId     String
+  page       Page        @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  LinkClick  LinkClick[]
 }
 
 model VerificationToken {
   id      String   @id @default(uuid())
-  token   String   @unique // O código de 6 dígitos
-  expires DateTime // Data de expiração do token
-
-  // Relação com o usuário
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token   String   @unique
+  expires DateTime
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("verification_tokens")
 }
@@ -196,44 +165,29 @@ model Template {
   name            String
   previewImageUrl String
   visibility      TemplateVisibility @default(PUBLIC)
-
-  // Armazena um snapshot JSON da página no momento da criação do template
-  // Isso desacopla o template da página original
-  pageData Json
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // RELAÇÕES
-  // Criador do template
-  creatorId String
-  creator   User   @relation("TemplatesCreated", fields: [creatorId], references: [id], onDelete: Cascade)
-
-  favoritedBy UserFavoriteTemplate[]
-
-  // Tags associadas ao template
-  tags Tag[]
+  pageData        Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  creatorId       String
+  creator         User   @relation("TemplatesCreated", fields: [creatorId], references: [id], onDelete: Cascade)
+  favoritedBy     UserFavoriteTemplate[]
+  tags            Tag[]
 }
 
-// Modelo para as Tags
 model Tag {
-  id   String @id @default(uuid())
-  name String @unique // Nomes de tags devem ser únicos
-
-  // RELAÇÕES
+  id        String @id @default(uuid())
+  name      String @unique
   templates Template[]
 }
 
-// Tabela de junção para a relação Muitos-para-Muitos entre User e Template (Favoritos)
 model UserFavoriteTemplate {
   userId     String
   templateId String
   createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  @@id([userId, templateId]) // Chave primária composta
+  @@id([userId, templateId])
 }
 
 model PageView {
@@ -241,8 +195,8 @@ model PageView {
   pageId    String
   page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
   timestamp DateTime @default(now())
-  country   String? // Ex: "BR"
-  referrer  String? // Ex: "instagram.com"
+  country   String?
+  referrer  String?
 }
 
 model LinkClick {

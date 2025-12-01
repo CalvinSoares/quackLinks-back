@@ -10,9 +10,8 @@ import {
 
 const linkRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
-  const linkController = new LinkController(server);
+  const linkController = new LinkController(server.linkService);
 
-  // Todas as rotas de links são privadas e exigem autenticação
   server.addHook("onRequest", server.authenticate);
 
   server.post(
