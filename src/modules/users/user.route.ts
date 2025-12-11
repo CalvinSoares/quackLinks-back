@@ -7,48 +7,57 @@ import {
   updateUserSchema,
   userIdSchema,
 } from "./user.schema";
+import { authenticateJwt } from "../../plugins/authenticate";
 
 const userRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const userController = new UserController(server.userService);
 
-  // Aplica o hook de autenticação a TODAS as rotas deste plugin
-  server.addHook("onRequest", server.authenticate);
+  server.get(
+    "/me",
+    { preHandler: [authenticateJwt] },
+    userController.getMeHandler
+  );
 
-  // A rota /me deve vir antes de /:id para não ser confundida com um parâmetro
-  server.get("/me", userController.getMeHandler);
-
-  server.get("/", userController.getUsersHandler);
+  server.get(
+    "/",
+    { preHandler: [authenticateJwt] },
+    userController.getUsersHandler
+  );
   server.get(
     "/:id",
-    { schema: userIdSchema },
+    { schema: userIdSchema, preHandler: [authenticateJwt] },
     userController.getUserByIdHandler
   );
   server.put(
     "/:id",
-    { schema: updateUserSchema },
+    { schema: updateUserSchema, preHandler: [authenticateJwt] },
     userController.updateUserHandler
   );
 
   server.put(
     "/email",
-    { schema: updateEmailSchema },
+    { schema: updateEmailSchema, preHandler: [authenticateJwt] },
     userController.updateEmailHandler
   );
 
   server.put(
     "/password",
-    { schema: updatePasswordSchema },
+    { schema: updatePasswordSchema, preHandler: [authenticateJwt] },
     userController.updatePasswordHandler
   );
 
   server.delete(
     "/:id",
-    { schema: userIdSchema },
+    { schema: userIdSchema, preHandler: [authenticateJwt] },
     userController.deleteUserHandler
   );
 
-  server.delete("/me/connections/discord", userController.unlinkDiscordHandler);
+  server.delete(
+    "/me/connections/discord",
+    { preHandler: [authenticateJwt] },
+    userController.unlinkDiscordHandler
+  );
 };
 
 export default userRoutes;

@@ -7,6 +7,7 @@ const audioIdParams = z.object({
 export const createAudioBodySchema = z.object({
   title: z.string().min(1, "O título é obrigatório.").max(100),
   url: z.url("URL do áudio inválida."),
+  type: z.enum(["DIRECT", "SPOTIFY", "SOUNDCLOUD"]),
   coverUrl: z.url("URL da capa inválida.").optional().nullable(),
   order: z.number().int().optional(),
 });

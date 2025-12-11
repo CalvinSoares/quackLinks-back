@@ -26,23 +26,57 @@ export class TemplateService {
   ) {}
 
   private buildPageData(page: PageWithDetails): Prisma.JsonObject {
-    return {
-      title: page.title,
-      bio: page.bio,
-      avatarUrl: page.avatarUrl,
-      backgroundUrl: page.backgroundUrl,
-      backgroundColor: page.backgroundColor,
-      location: page.location,
-      cursorUrl: page.cursorUrl,
-      theme: page.theme,
+    const {
+      id,
+      slug,
+      userId,
+      viewCount,
+      createdAt,
+      updatedAt,
+      user,
+      links,
+      audios,
+      ...restOfPageData
+    } = page;
+
+    const templateLinks = links?.map((link) => ({
+      title: link.title,
+      url: link.url,
+      order: link.order,
+    }));
+
+    const templateAudios = audios?.map((audio) => ({
+      title: audio.title,
+      url: audio.url,
+      coverUrl: audio.coverUrl,
+      order: audio.order,
+      isActive: audio.isActive,
+    }));
+
+    const finalPageData = {
+      ...restOfPageData,
+      links: templateLinks,
+      audios: templateAudios,
     };
+
+    return finalPageData as unknown as Prisma.JsonObject;
   }
 
   async createTemplate(userId: string, data: CreateTemplateInput) {
     const userPage = await this.pageRepository.findByUserId(userId);
     if (!userPage) throw new PageNotFoundError();
 
+    console.log(
+      "DADOS DA PÁGINA RECEBIDOS PELO SERVIÇO:",
+      JSON.stringify(userPage, null, 2)
+    );
+
     const pageData = this.buildPageData(userPage);
+
+    console.log(
+      "DADOS FINAIS A SEREM SALVOS NO TEMPLATE:",
+      JSON.stringify(pageData, null, 2)
+    );
 
     return this.templateRepository.create({
       data: {
@@ -101,6 +135,18 @@ export class TemplateService {
 
   async getTemplateById(id: string) {
     return this.templateRepository.findPublicById(id);
+  }
+
+  async listFavoriteTemplates(userId: string) {
+    return this.templateRepository.findFavoriteTemplates(userId);
+  }
+
+  async listRecentTemplates() {
+    return this.templateRepository.findRecentTemplates();
+  }
+
+  async listPopularTags() {
+    return this.templateRepository.findPopularTags(10);
   }
 
   async applyTemplate(userId: string, templateId: string) {

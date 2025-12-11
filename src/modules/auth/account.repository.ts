@@ -15,6 +15,12 @@ export interface IAccountRepository {
     providerAccountId: string;
     accessToken: string;
   }): Promise<Account>;
+  createOrUpdate(data: {
+    provider: string;
+    providerAccountId: string;
+    userId: string;
+    accessToken: string;
+  }): Promise<void>;
 }
 
 export class AccountRepository implements IAccountRepository {
@@ -46,6 +52,32 @@ export class AccountRepository implements IAccountRepository {
       data: {
         userId: data.userId,
         type: data.type,
+        provider: data.provider,
+        providerAccountId: data.providerAccountId,
+        access_token: data.accessToken,
+      },
+    });
+  }
+
+  async createOrUpdate(data: {
+    provider: string;
+    providerAccountId: string;
+    userId: string;
+    accessToken: string;
+  }): Promise<void> {
+    await this.prisma.account.upsert({
+      where: {
+        provider_providerAccountId: {
+          provider: data.provider,
+          providerAccountId: data.providerAccountId,
+        },
+      },
+      update: {
+        access_token: data.accessToken,
+      },
+      create: {
+        userId: data.userId,
+        type: "oauth",
         provider: data.provider,
         providerAccountId: data.providerAccountId,
         access_token: data.accessToken,

@@ -12,8 +12,6 @@ const linkRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const linkController = new LinkController(server.linkService);
 
-  server.addHook("onRequest", server.authenticate);
-
   server.post(
     "/",
     { schema: createLinkSchema },

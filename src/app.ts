@@ -6,44 +6,18 @@ import {
   validatorCompiler,
 } from "fastify-type-provider-zod";
 import fastifyCors from "@fastify/cors";
-import { FastifyJWT } from "@fastify/jwt";
 import fastifyRawBody from "fastify-raw-body";
-import dependencies from "./plugins/dependencies";
-
-declare module "@fastify/jwt" {
-  interface FastifyJWT {
-    payload: {
-      id: string;
-      name: string;
-      email: string | null;
-    };
-    user: {
-      id: string;
-      name: string;
-      email: string | null;
-      role: "FREE" | "PREMIUM";
-    };
-  }
-}
-
-declare module "fastify" {
-  export interface FastifyInstance {
-    authenticate: (
-      request: FastifyRequest,
-      reply: FastifyReply
-    ) => Promise<void>;
-  }
-  export interface FastifyRequest {
-    user: FastifyJWT["user"];
-  }
-}
+import fastifyCookie from "@fastify/cookie";
+import fastifySession from "@fastify/session";
+import passport from "@fastify/passport";
+import { Strategy as JwtStrategy, ExtractJwt } from "passport-jwt";
 
 export interface AppOptions
   extends FastifyServerOptions,
     Partial<AutoloadPluginOptions> {}
 
 const options: AppOptions = {
-  ignoreTrailingSlash: true, // Adicione aqui
+  ignoreTrailingSlash: true,
   logger: true,
 };
 
@@ -55,8 +29,9 @@ const app: FastifyPluginAsync<AppOptions> = async (
   fastify.setSerializerCompiler(serializerCompiler);
 
   await fastify.register(fastifyCors, {
-    origin: "http://localhost:5173",
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    credentials: true,
   });
 
   await fastify.register(fastifyRawBody, {
@@ -66,7 +41,49 @@ const app: FastifyPluginAsync<AppOptions> = async (
     runFirst: true,
   });
 
-  void fastify.register(dependencies);
+  await fastify.register(fastifyCookie);
+  await fastify.register(fastifySession, {
+    secret: process.env.SESSION_SECRET!,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+    },
+  });
+
+  passport.registerUserSerializer(async (user: any) => user.id);
+  passport.registerUserDeserializer(async (id: string) => {
+    return await fastify.prisma.user.findUnique({ where: { id } });
+  });
+
+  passport.use(
+    "jwt",
+    new JwtStrategy(
+      {
+        jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+        secretOrKey:
+          process.env.JWT_SECRET ||
+          "super-secret-key-change-this-in-production",
+      },
+      async (jwt_payload, done) => {
+        try {
+          const user = await fastify.prisma.user.findUnique({
+            where: { id: jwt_payload.id },
+          });
+
+          if (user) {
+            return done(null, user);
+          } else {
+            return done(null, false);
+          }
+        } catch (error) {
+          return done(error, false);
+        }
+      }
+    )
+  );
+
+  await fastify.register(passport.initialize());
+  await fastify.register(passport.secureSession());
 
   void fastify.register(AutoLoad, {
     dir: join(__dirname, "plugins"),

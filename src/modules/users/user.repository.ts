@@ -26,7 +26,7 @@ export interface IUserRepository {
     stripeCustomerId: string,
     data: Prisma.UserUpdateInput
   ): Promise<User>;
-  create(data: Prisma.UserCreateInput): Promise<PublicUser>;
+  create(data: Prisma.UserCreateInput): Promise<User>;
   update(id: string, data: Prisma.UserUpdateInput): Promise<PublicUser>;
   deleteById(id: string): Promise<PublicUser>;
   deleteDiscordAccount(userId: string): Promise<void>;
@@ -58,11 +58,8 @@ export class UserRepository implements IUserRepository {
     });
   }
 
-  async create(data: Prisma.UserCreateInput): Promise<PublicUser> {
-    return this.prisma.user.create({
-      data,
-      select: publicUserSelect,
-    });
+  async create(data: Prisma.UserCreateInput) {
+    return this.prisma.user.create({ data });
   }
 
   async update(id: string, data: Prisma.UserUpdateInput): Promise<PublicUser> {

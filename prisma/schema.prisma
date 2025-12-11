@@ -12,6 +12,12 @@ enum UserRole {
   PREMIUM
 }
 
+enum AudioType {
+  DIRECT
+  SPOTIFY
+  SOUNDCLOUD
+}
+
 model Account {
   id                String  @id @default(uuid())
   userId            String
@@ -109,6 +115,8 @@ model Audio {
   id        String  @id @default(uuid())
   title     String
   url       String  @db.Text
+  type      AudioType @default(DIRECT)
+  spotifyTrackId String?
   coverUrl  String? @db.Text
   duration  Int?
   order     Int     @default(0)
@@ -207,3 +215,4 @@ model LinkClick {
   country   String?
   referrer  String?
 }
+

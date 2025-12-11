@@ -6,35 +6,41 @@ import {
   setActiveAudioSchema,
   updateAudioSchema,
 } from "./audio.schema";
+import { authenticateJwt } from "../../plugins/authenticate";
+import { ZodTypeProvider } from "fastify-type-provider-zod";
 
 const audioRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
+  const server = fastify.withTypeProvider<ZodTypeProvider>();
+
   const audioController = new AudioController(fastify.audioService);
 
-  fastify.addHook("onRequest", fastify.authenticate);
-
-  fastify.get("/", audioController.listAudiosHandler);
-
-  fastify.post(
+  server.get(
     "/",
-    { schema: createAudioSchema },
+    { preHandler: [authenticateJwt] },
+    audioController.listAudiosHandler
+  );
+
+  server.post(
+    "/",
+    { schema: createAudioSchema, preHandler: [authenticateJwt] },
     audioController.createAudioHandler
   );
 
-  fastify.put(
+  server.put(
     "/:audioId",
-    { schema: updateAudioSchema },
+    { schema: updateAudioSchema, preHandler: [authenticateJwt] },
     audioController.updateAudioHandler
   );
 
-  fastify.delete(
+  server.delete(
     "/:audioId",
-    { schema: deleteAudioSchema },
+    { schema: deleteAudioSchema, preHandler: [authenticateJwt] },
     audioController.deleteAudioHandler
   );
 
-  fastify.post(
+  server.post(
     "/:audioId/set-active",
-    { schema: setActiveAudioSchema },
+    { schema: setActiveAudioSchema, preHandler: [authenticateJwt] },
     audioController.setActiveAudioHandler
   );
 };

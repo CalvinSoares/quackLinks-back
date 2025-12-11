@@ -106,6 +106,41 @@ export class AuthService {
     await this.authRepository.deleteVerificationToken(verificationToken.id);
   }
 
+  async findOrCreateDiscordUser(profile: any): Promise<User> {
+    const discordEmail = profile.email;
+    if (!discordEmail) {
+      throw new Error("Não foi possível obter o e-mail do Discord.");
+    }
+
+    let user = await this.userRepository.findByEmail(discordEmail);
+
+    if (user) {
+      // Se o usuário já existe, atualizamos o avatar
+      await this.userRepository.update(user.id, {
+        discordAvatarUrl: getDiscordAvatarUrl(profile.id, profile.avatar),
+      });
+    } else {
+      user = await this.userRepository.create({
+        email: discordEmail,
+        name: profile.username,
+        emailVerified: new Date(), // E-mail do Discord é considerado verificado
+        discordAvatarUrl: getDiscordAvatarUrl(profile.id, profile.avatar),
+      });
+      // Lembre-se de adicionar a lógica para criar a página padrão para o novo usuário aqui, se necessário.
+    }
+
+    // Garante que a conta OAuth está vinculada ao nosso usuário
+    await this.accountRepository.createOrUpdate({
+      provider: "discord",
+      providerAccountId: profile.id,
+      userId: user.id,
+      accessToken: profile.accessToken, // O accessToken vem do profile do passport-discord
+      // refreshToken: profile.refreshToken // Se a estratégia o fornecer
+    });
+
+    return user;
+  }
+
   async handleDiscordCallback(
     code: string
   ): Promise<{ user: User; isNewUser: boolean }> {

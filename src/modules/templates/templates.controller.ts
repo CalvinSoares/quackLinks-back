@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { TemplateService } from "./templates.service";
 import { CreateTemplateInput, ListTemplatesQuery } from "./templates.schema";
+import { User as PrismaUser } from "@prisma/client";
 
 export class TemplateController {
   constructor(private templateService: TemplateService) {}
@@ -9,8 +10,12 @@ export class TemplateController {
     reply: FastifyReply
   ) => {
     try {
+      if (!req.user) {
+        return reply.code(401).send({ message: "Não autorizado." });
+      }
+      const user = req.user as PrismaUser;
       const template = await this.templateService.createTemplate(
-        req.user.id,
+        user.id,
         req.body
       );
       return reply.code(201).send(template);
@@ -26,8 +31,12 @@ export class TemplateController {
     req: FastifyRequest,
     reply: FastifyReply
   ) => {
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
     try {
-      const result = await this.templateService.listUserTemplates(req.user.id);
+      const result = await this.templateService.listUserTemplates(user.id);
       return reply.send(result);
     } catch (error) {
       console.error("Error fetching user templates:", error);
@@ -45,6 +54,45 @@ export class TemplateController {
     return result;
   };
 
+  listFavoriteTemplatesHandler = async (
+    req: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
+    try {
+      const templates = await this.templateService.listFavoriteTemplates(
+        user.id
+      );
+      return reply.send(templates);
+    } catch (error) {
+      console.error("Error fetching favorite templates:", error);
+      return reply.code(500).send({ message: "Failed to fetch favorites." });
+    }
+  };
+
+  listRecentTemplatesHandler = async (
+    req: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    try {
+      const templates = await this.templateService.listRecentTemplates();
+      return reply.send(templates);
+    } catch (error) {
+      console.error("Error fetching recent templates:", error);
+      return reply
+        .code(500)
+        .send({ message: "Failed to fetch recent templates." });
+    }
+  };
+
+  listPopularTagsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+    const tags = await this.templateService.listPopularTags();
+    return tags;
+  };
+
   getTemplateHandler = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
@@ -60,9 +108,13 @@ export class TemplateController {
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
   ) => {
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
     try {
       const updatedPage = await this.templateService.applyTemplate(
-        req.user.id,
+        user.id,
         req.params.id
       );
       return updatedPage;
@@ -78,7 +130,11 @@ export class TemplateController {
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
   ) => {
-    await this.templateService.favoriteTemplate(req.user.id, req.params.id);
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
+    await this.templateService.favoriteTemplate(user.id, req.params.id);
     return reply.code(204).send();
   };
 
@@ -86,8 +142,12 @@ export class TemplateController {
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
   ) => {
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
     try {
-      await this.templateService.unfavoriteTemplate(req.user.id, req.params.id);
+      await this.templateService.unfavoriteTemplate(user.id, req.params.id);
       return reply.code(204).send();
     } catch (error) {
       return reply
@@ -100,8 +160,12 @@ export class TemplateController {
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
   ) => {
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
     try {
-      await this.templateService.deleteTemplate(req.user.id, req.params.id);
+      await this.templateService.deleteTemplate(user.id, req.params.id);
       return reply.code(204).send();
     } catch (error) {
       console.error("Error deleting template:", error);

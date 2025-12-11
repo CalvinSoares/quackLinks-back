@@ -5,7 +5,6 @@ const billingRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
   const billingController = new BillingController(fastify.billingService);
 
   fastify.register(async (privateRoutes) => {
-    privateRoutes.addHook("onRequest", privateRoutes.authenticate);
     privateRoutes.post(
       "/checkout",
       billingController.createCheckoutSessionHandler

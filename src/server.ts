@@ -1,6 +1,5 @@
 import Fastify from "fastify";
 import { FastifyInstance } from "fastify";
-
 import app from "./app";
 import "dotenv/config";
 import { startSchedulers } from "./scheduler";
@@ -9,6 +8,7 @@ import {
   validatorCompiler,
 } from "fastify-type-provider-zod";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
+
 const BODY_LIMIT_IN_BYTES = 10 * 1024 * 1024;
 
 async function setupCustomDomainRouting(server: FastifyInstance) {
@@ -20,20 +20,24 @@ async function setupCustomDomainRouting(server: FastifyInstance) {
       return;
     }
 
-    const customDomain = await server.prisma.customDomain.findUnique({
-      where: { domain: hostname, verified: true },
-      include: { user: { include: { Page: true } } },
-    });
+    try {
+      const customDomain = await server.prisma.customDomain.findUnique({
+        where: { domain: hostname, verified: true },
+        include: { user: { include: { Page: true } } },
+      });
 
-    if (customDomain && customDomain.user.Page) {
-      const slug = customDomain.user.Page.slug;
-
-      request.raw.url = `/${slug}`;
-      console.log(`[CustomDomain] Roteando '${hostname}' para '/${slug}'`);
-    } else {
-      reply
-        .code(404)
-        .send({ message: `Domínio '${hostname}' não configurado.` });
+      if (customDomain && customDomain.user.Page) {
+        request.raw.url = `/${customDomain.user.Page.slug}`;
+      } else {
+        reply
+          .code(404)
+          .send({ message: `Domínio '${hostname}' não configurado.` });
+      }
+    } catch (e) {
+      // Evita crash se o prisma não estiver pronto na primeira requisição
+      request.log.warn(
+        "Prisma ainda não disponível para roteamento de domínio customizado."
+      );
     }
   });
 }
@@ -41,7 +45,6 @@ async function setupCustomDomainRouting(server: FastifyInstance) {
 const server = Fastify({
   bodyLimit: BODY_LIMIT_IN_BYTES,
   ignoreTrailingSlash: true,
-
   logger: true,
 }).withTypeProvider<ZodTypeProvider>();
 
@@ -52,14 +55,14 @@ server.register(app);
 
 async function start() {
   try {
-    server.listen({ port: 3000 }, (err, address) => {
-      if (err) {
-        server.log.error(err);
-        process.exit(1);
-      }
+    await server.listen({
+      port: 3000,
+      host: "0.0.0.0",
     });
     await setupCustomDomainRouting(server);
-    startSchedulers();
+    startSchedulers(server.prisma);
+
+    server.log.info(`Servidor escutando em http://localhost:3000`);
   } catch (err) {
     server.log.error(err);
     process.exit(1);
