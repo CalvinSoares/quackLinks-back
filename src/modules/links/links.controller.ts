@@ -6,6 +6,7 @@ import {
   UpdateLinkInput,
 } from "./links.schema";
 import { Prisma } from "@prisma/client";
+import { User as PrismaUser } from "@prisma/client";
 
 export class LinkController {
   constructor(private linkService: LinkService) {}
@@ -14,8 +15,12 @@ export class LinkController {
     req: FastifyRequest<{ Body: CreateLinkInput }>,
     reply: FastifyReply
   ) => {
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
     try {
-      const link = await this.linkService.createLink(req.user.id, req.body);
+      const link = await this.linkService.createLink(user.id, req.body);
       return reply.code(201).send(link);
     } catch (error) {
       return reply
@@ -28,9 +33,13 @@ export class LinkController {
     req: FastifyRequest<{ Body: UpdateLinkInput; Params: { linkId: string } }>,
     reply: FastifyReply
   ) => {
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
     try {
       const link = await this.linkService.updateLink(
-        req.user.id,
+        user.id,
         req.params.linkId,
         req.body
       );
@@ -55,8 +64,12 @@ export class LinkController {
     req: FastifyRequest<{ Params: { linkId: string } }>,
     reply: FastifyReply
   ) => {
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
     try {
-      await this.linkService.deleteLink(req.user.id, req.params.linkId);
+      await this.linkService.deleteLink(user.id, req.params.linkId);
       return reply.code(204).send();
     } catch (error) {
       if (
@@ -77,8 +90,12 @@ export class LinkController {
     req: FastifyRequest<{ Body: ReorderLinkInput }>,
     reply: FastifyReply
   ) => {
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
     try {
-      await this.linkService.reorderLinks(req.user.id, req.body);
+      await this.linkService.reorderLinks(user.id, req.body);
       return { message: "Links reordenados com sucesso." };
     } catch (error: any) {
       // Captura o erro de permissão que definimos no serviço

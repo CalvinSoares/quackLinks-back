@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { BillingService } from "./billing.service";
+import { User as PrismaUser } from "@prisma/client";
 import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -11,10 +12,14 @@ export class BillingController {
     req: FastifyRequest,
     reply: FastifyReply
   ) => {
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
     try {
       const session = await this.billingService.createCheckoutSession(
-        req.user.id,
-        req.user.email!
+        user.id,
+        user.email!
       );
       return session;
     } catch (error) {

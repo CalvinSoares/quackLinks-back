@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { PageController } from "./pages.controller";
 import { getPageBySlugSchema, updatePageSchema } from "./pages.schema";
+import { authenticateJwt } from "../../plugins/authenticate";
 
 const pageRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
@@ -17,7 +18,7 @@ const pageRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   );
 
   server.register(async (privateRoutes) => {
-    privateRoutes.addHook("onRequest", privateRoutes.authenticate);
+    privateRoutes.addHook("preHandler", authenticateJwt);
 
     privateRoutes.get("/my-page", pageController.getMyPageHandler);
 

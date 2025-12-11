@@ -1,10 +1,15 @@
 import { z } from "zod";
 
-export const timePeriodSchema = z.enum(["7d", "30d", "90d", "all"]);
-export type TimePeriod = z.infer<typeof timePeriodSchema>;
+const getAnalyticsQuerystringSchema = z.object({
+  period: z.enum(["7d", "30d", "90d", "all"]).default("30d"),
+});
+
+export type GetAnalyticsQuery = z.infer<typeof getAnalyticsQuerystringSchema>;
 
 export const getAnalyticsSchema = {
-  querystring: z.object({
-    period: timePeriodSchema.default("30d"),
-  }),
+  querystring: getAnalyticsQuerystringSchema,
 };
+
+export type TimePeriod = z.infer<
+  typeof getAnalyticsQuerystringSchema.shape.period
+>;

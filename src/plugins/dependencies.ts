@@ -22,9 +22,12 @@ import { LinkRepository } from "../modules/links/links.repository";
 import { BillingService } from "../modules/billing/billing.service";
 import { DomainService } from "../modules/domains/domains.service";
 import { DomainRepository } from "../modules/domains/domains.repository";
+import { RedirectService } from "../modules/redirect/redirect.service";
+import { RedirectRepository } from "../modules/redirect/redirect.repository";
 
 declare module "fastify" {
   interface FastifyInstance {
+    prisma: PrismaClient;
     pageService: PageService;
     analyticsService: AnalyticsService;
     userService: UserService;
@@ -35,12 +38,18 @@ declare module "fastify" {
     linkService: LinkService;
     billingService: BillingService;
     domainService: DomainService;
+    redirectService: RedirectService;
   }
 }
 
 const dependenciesPlugin: FastifyPluginAsync = async (fastify, opts) => {
   const prisma = new PrismaClient();
+  await prisma.$connect();
   fastify.decorate("prisma", prisma);
+
+  fastify.addHook("onClose", async (instance) => {
+    await instance.prisma.$disconnect();
+  });
 
   const pageRepository = new PageRepository(prisma);
   const userRepository = new UserRepository(prisma);
@@ -51,6 +60,7 @@ const dependenciesPlugin: FastifyPluginAsync = async (fastify, opts) => {
   const templateRepository = new TemplateRepository(prisma);
   const linkRepository = new LinkRepository(prisma);
   const domainRepository = new DomainRepository(prisma);
+  const redirectRepository = new RedirectRepository(prisma);
 
   const pageService = new PageService(pageRepository);
   const userService = new UserService(userRepository);
@@ -72,6 +82,10 @@ const dependenciesPlugin: FastifyPluginAsync = async (fastify, opts) => {
   const linkService = new LinkService(linkRepository, pageRepository);
   const billingService = new BillingService(userRepository);
   const domainService = new DomainService(domainRepository);
+  const redirectService = new RedirectService(
+    redirectRepository,
+    analyticsService
+  );
 
   fastify.decorate("pageService", pageService);
   fastify.decorate("userService", userService);
@@ -83,6 +97,7 @@ const dependenciesPlugin: FastifyPluginAsync = async (fastify, opts) => {
   fastify.decorate("linkService", linkService);
   fastify.decorate("billingService", billingService);
   fastify.decorate("domainService", domainService);
+  fastify.decorate("redirectService", redirectService);
 };
 
 export default fp(dependenciesPlugin);

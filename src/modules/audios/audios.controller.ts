@@ -1,37 +1,60 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { AudioService } from "./audios.service";
 import { CreateAudioInput, UpdateAudioInput } from "./audio.schema";
+import { User as PrismaUser } from "@prisma/client";
+
+// --- Definição de Tipos para uso interno ---
+type CreateAudioRequest = FastifyRequest<{
+  Body: CreateAudioInput;
+}>;
+
+type UpdateAudioRequest = FastifyRequest<{
+  Params: { audioId: string };
+  Body: UpdateAudioInput;
+}>;
+
+type AudioParamsRequest = FastifyRequest<{
+  Params: { audioId: string };
+}>;
 
 export class AudioController {
   constructor(private audioService: AudioService) {}
 
-  createAudioHandler = async (
-    req: FastifyRequest<{ Body: CreateAudioInput }>,
-    reply: FastifyReply
-  ) => {
+  // 1. Create Audio
+  createAudioHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+    // Casting para obter tipagem no corpo da função
+    const request = req as CreateAudioRequest;
+
+    if (!request.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = request.user as PrismaUser;
+
     try {
-      const audio = await this.audioService.create(req.user.id, req.body);
+      // Agora request.body está tipado corretamente
+      const audio = await this.audioService.create(user.id, request.body);
       return reply.code(201).send(audio);
     } catch (error: any) {
-      if (error.message.includes("Limite")) {
+      if (error.message && error.message.includes("Limite")) {
         return reply.code(403).send({ message: error.message });
       }
       return reply.code(500).send({ message: "Erro ao criar áudio." });
     }
   };
 
-  updateAudioHandler = async (
-    req: FastifyRequest<{
-      Params: { audioId: string };
-      Body: UpdateAudioInput;
-    }>,
-    reply: FastifyReply
-  ) => {
+  // 2. Update Audio
+  updateAudioHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+    const request = req as UpdateAudioRequest;
+
+    if (!request.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = request.user as PrismaUser;
     try {
       const audio = await this.audioService.update(
-        req.user.id,
-        req.params.audioId,
-        req.body
+        user.id,
+        request.params.audioId,
+        request.body
       );
       return audio;
     } catch (error) {
@@ -41,14 +64,19 @@ export class AudioController {
     }
   };
 
-  deleteAudioHandler = async (
-    req: FastifyRequest<{ Params: { audioId: string } }>,
-    reply: FastifyReply
-  ) => {
+  // 3. Delete Audio
+  deleteAudioHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+    const request = req as AudioParamsRequest;
+
     try {
+      if (!request.user) {
+        return reply.code(401).send({ message: "Não autorizado." });
+      }
+      const user = request.user as PrismaUser;
+
       const result = await this.audioService.delete(
-        req.user.id,
-        req.params.audioId
+        user.id,
+        request.params.audioId
       );
       return result;
     } catch (error) {
@@ -58,14 +86,18 @@ export class AudioController {
     }
   };
 
-  setActiveAudioHandler = async (
-    req: FastifyRequest<{ Params: { audioId: string } }>,
-    reply: FastifyReply
-  ) => {
+  // 4. Set Active Audio
+  setActiveAudioHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+    const request = req as AudioParamsRequest;
+
+    if (!request.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = request.user as PrismaUser;
     try {
       const audio = await this.audioService.setActive(
-        req.user.id,
-        req.params.audioId
+        user.id,
+        request.params.audioId
       );
       return audio;
     } catch (error) {
@@ -75,9 +107,14 @@ export class AudioController {
     }
   };
 
+  // 5. List Audios (Este já estava genérico, mas mantive o padrão)
   listAudiosHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!req.user) {
+      return reply.code(401).send({ message: "Não autorizado." });
+    }
+    const user = req.user as PrismaUser;
     try {
-      const audios = await this.audioService.listByPage(req.user.id);
+      const audios = await this.audioService.listByPage(user.id);
       return audios;
     } catch (error) {
       return reply.code(500).send({ message: "Erro ao listar áudios." });

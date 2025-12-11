@@ -26,8 +26,6 @@ const templateRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
   );
 
   server.register(async (privateRoutes) => {
-    privateRoutes.addHook("onRequest", privateRoutes.authenticate);
-
     privateRoutes.post(
       "/",
       { schema: createTemplateSchema },
@@ -35,6 +33,19 @@ const templateRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
     );
 
     privateRoutes.get("/mine", {}, templateController.listUserTemplatesHandler);
+
+    privateRoutes.get(
+      "/favorites",
+      {},
+      templateController.listFavoriteTemplatesHandler
+    );
+    privateRoutes.get(
+      "/recent",
+      {},
+      templateController.listRecentTemplatesHandler
+    );
+
+    server.get("/tags/popular", {}, templateController.listPopularTagsHandler);
 
     privateRoutes.post(
       "/:id/apply",

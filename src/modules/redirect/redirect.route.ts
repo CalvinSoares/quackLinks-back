@@ -8,10 +8,8 @@ const redirectRoutes: FastifyPluginAsync = async (
   opts
 ): Promise<void> => {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
-  const redirectController = new RedirectController(server);
+  const redirectController = new RedirectController(server.redirectService);
 
-  // Rota pública para redirecionar e rastrear cliques
-  // Ex: GET /api/v1/redirect/uuid-do-link
   server.get(
     "/:linkId",
     { schema: redirectSchema },

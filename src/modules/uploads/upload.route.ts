@@ -10,8 +10,6 @@ const uploadRoutes: FastifyPluginAsync = async (
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const uploadController = new UploadController(server.uploadService);
 
-  server.addHook("onRequest", server.authenticate);
-
   server.post(
     "/signed-url",
     { schema: createSignedUrlSchema },

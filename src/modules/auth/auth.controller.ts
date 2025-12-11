@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { LoginInput, RegisterUserInput, VerifyEmailInput } from "./auth.schema";
-
+import jwt from "jsonwebtoken";
 import {
   AuthService,
   InvalidTokenError,
@@ -11,6 +11,7 @@ import {
   IncorrectPasswordError,
   UserNotFoundError,
 } from "../users/user.service";
+import { User } from "@prisma/client";
 
 export class AuthController {
   constructor(private authService: AuthService) {}
@@ -55,7 +56,13 @@ export class AuthController {
         name: user.name,
         role: user.role,
       };
-      const token = await reply.jwtSign(payload);
+      const token = jwt.sign(
+        payload,
+        process.env.JWT_SECRET || "super-secret-key-change-this-in-production",
+        { expiresIn: "7d" }
+      );
+
+      await request.logIn(user);
 
       return reply.redirect(
         `${process.env.FRONTEND_URL}/auth/callback?token=${token}`
@@ -100,7 +107,13 @@ export class AuthController {
         name: user.name,
         role: user.role,
       };
-      const token = await reply.jwtSign(payload);
+      const token = jwt.sign(
+        payload,
+        process.env.JWT_SECRET || "super-secret-key-change-this-in-production",
+        { expiresIn: "7d" }
+      );
+
+      await request.logIn(user);
 
       return { token };
     } catch (error) {
@@ -113,6 +126,26 @@ export class AuthController {
       console.error(error);
       return reply.code(500).send({ message: "Erro ao fazer login." });
     }
+  };
+
+  generateTokenHandler = async (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    const user = request.user as User;
+    const payload = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    };
+    const token = jwt.sign(
+      payload,
+      process.env.JWT_SECRET || "super-secret-key-change-this-in-production",
+      { expiresIn: "7d" }
+    );
+
+    return { token };
   };
 
   verifyEmailHandler = async (
