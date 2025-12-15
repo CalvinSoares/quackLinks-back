@@ -24,6 +24,8 @@ import { DomainService } from "../modules/domains/domains.service";
 import { DomainRepository } from "../modules/domains/domains.repository";
 import { RedirectService } from "../modules/redirect/redirect.service";
 import { RedirectRepository } from "../modules/redirect/redirect.repository";
+import { BlockService } from "../modules/blocks/blocks.service";
+import { BlockRepository } from "../modules/blocks/blocks.repository";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -39,6 +41,7 @@ declare module "fastify" {
     billingService: BillingService;
     domainService: DomainService;
     redirectService: RedirectService;
+    blockService: BlockService;
   }
 }
 
@@ -61,6 +64,7 @@ const dependenciesPlugin: FastifyPluginAsync = async (fastify, opts) => {
   const linkRepository = new LinkRepository(prisma);
   const domainRepository = new DomainRepository(prisma);
   const redirectRepository = new RedirectRepository(prisma);
+  const blockRepository = new BlockRepository(prisma);
 
   const pageService = new PageService(pageRepository);
   const userService = new UserService(userRepository);
@@ -86,6 +90,7 @@ const dependenciesPlugin: FastifyPluginAsync = async (fastify, opts) => {
     redirectRepository,
     analyticsService
   );
+  const blockService = new BlockService(blockRepository, pageRepository);
 
   fastify.decorate("pageService", pageService);
   fastify.decorate("userService", userService);
@@ -98,6 +103,7 @@ const dependenciesPlugin: FastifyPluginAsync = async (fastify, opts) => {
   fastify.decorate("billingService", billingService);
   fastify.decorate("domainService", domainService);
   fastify.decorate("redirectService", redirectService);
+  fastify.decorate("blockService", blockService);
 };
 
 export default fp(dependenciesPlugin);

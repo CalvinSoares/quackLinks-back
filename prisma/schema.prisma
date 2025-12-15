@@ -18,6 +18,17 @@ enum AudioType {
   SOUNDCLOUD
 }
 
+enum BlockType {
+  LINK
+  HEADER
+  TEXT
+  DIVIDER
+  VIDEO
+  SOCIAL
+  IMAGE
+  AUDIO
+}
+
 model Account {
   id                String  @id @default(uuid())
   userId            String
@@ -62,85 +73,105 @@ model User {
   CustomDomain      CustomDomain?
 }
 
+model Block {
+  id     String @id @default(uuid())
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  type      BlockType
+  order     Int       @default(0)
+  isVisible Boolean   @default(true)
+
+  content Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+}
+
 model Page {
-  id                 String  @id @default(uuid())
-  slug               String  @unique
-  title              String?
-  bio                String?
-  avatarUrl          String?
-  showProfileCard    Boolean @default(true)
-  profileCardColor   String?
-  profileCardOpacity Float   @default(0.2)
-  useStandardIconColors Boolean @default(true)
-  glowEffect         String  @default("none")
-  showViewCount      Boolean @default(true)
-  buttonStyle        String  @default("solid")
-  buttonRoundness    String  @default("rounded-lg")
-  buttonShadow       Boolean @default(false)
-  layoutType         String @default("standard")
-  linkStyle          String @default("classic")
-  layoutLinkStyle    String @default("list")
-  backgroundOverlay  String?
-  backgroundBlur     Int     @default(0)
-  customCss          String? @db.Text
-  backgroundType     String  @default("solid")
-  titleEffect        String  @default("none")
-  gradientDirection  String?
-  gradientColorA     String?
-  gradientColorB     String?
-  backgroundUrl      String?
-  backgroundVideoUrl String?
-  backgroundColor    String?
-  location           String?
-  cursorUrl          String?
-  shuffleAudios      Boolean @default(false)
-  showAudioPlayer    Boolean @default(true)
-  showAudioButton    Boolean @default(true)
-  textColor          String?
-  iconColor          String?
-  profileRingType    String?  @default("none")
-  profileRingColors  String[] @default([])
-  theme              String @default("default")
-  viewCount          Int    @default(0)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  userId             String @unique
-  user               User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  links              Link[]
-  PageView           PageView[]
-  audios             Audio[]
+  id                    String     @id @default(uuid())
+  slug                  String     @unique
+  title                 String?
+  bio                   String?
+  avatarUrl             String?
+  showProfileCard       Boolean    @default(true)
+  profileCardColor      String?
+  profileCardOpacity    Float      @default(0.2)
+  useStandardIconColors Boolean    @default(true)
+  glowEffect            String     @default("none")
+  showViewCount         Boolean    @default(true)
+  buttonStyle           String     @default("solid")
+  buttonRoundness       String     @default("rounded-lg")
+  buttonShadow          Boolean    @default(false)
+  layoutType            String     @default("standard")
+  pageLayout            String     @default("standard")
+  linkStyle             String     @default("classic")
+  layoutLinkStyle       String     @default("list")
+  backgroundOverlay     String?
+  backgroundBlur        Int        @default(0)
+  customCss             String?    @db.Text
+  backgroundType        String     @default("solid")
+  titleEffect           String     @default("none")
+  gradientDirection     String?
+  gradientColorA        String?
+  gradientColorB        String?
+  backgroundUrl         String?
+  backgroundVideoUrl    String?
+  backgroundColor       String?
+  location              String?
+  cursorUrl             String?
+  shuffleAudios         Boolean    @default(false)
+  showAudioPlayer       Boolean    @default(true)
+  showEmbeds            Boolean    @default(true)
+  showAudioButton       Boolean    @default(true)
+  textColor             String?
+  iconColor             String?
+  profileRingType       String?    @default("none")
+  profileRingColors     String[]   @default([])
+  theme                 String     @default("default")
+  viewCount             Int        @default(0)
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  userId                String     @unique
+  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links                 Link[]
+  PageView              PageView[]
+  audios                Audio[]
+  blocks                Block[]
 }
 
 model Audio {
-  id        String  @id @default(uuid())
-  title     String
-  url       String  @db.Text
-  type      AudioType @default(DIRECT)
+  id             String    @id @default(uuid())
+  title          String
+  url            String    @db.Text
+  type           AudioType @default(DIRECT)
   spotifyTrackId String?
-  coverUrl  String? @db.Text
-  duration  Int?
-  order     Int     @default(0)
-  isActive  Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  pageId    String
-  page      Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  coverUrl       String?   @db.Text
+  duration       Int?
+  order          Int       @default(0)
+  isActive       Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  pageId         String
+  page           Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
 }
 
 model Link {
-  id         String @id @default(uuid())
-  title      String
-  url        String
-  order      Int    @default(0)
-  clickCount Int    @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  isActive   Boolean   @default(true)
+  id          String      @id @default(uuid())
+  title       String
+  url         String
+  order       Int         @default(0)
+  clickCount  Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  isActive    Boolean     @default(true)
   scheduledAt DateTime?
-  expiresAt  DateTime?
-  pageId     String
-  page       Page        @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  LinkClick  LinkClick[]
+  expiresAt   DateTime?
+  pageId      String
+  page        Page        @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  LinkClick   LinkClick[]
 }
 
 model VerificationToken {
@@ -148,7 +179,7 @@ model VerificationToken {
   token   String   @unique
   expires DateTime
   userId  String
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("verification_tokens")
 }
@@ -169,22 +200,22 @@ enum TemplateVisibility {
 }
 
 model Template {
-  id              String             @id @default(uuid())
+  id              String                 @id @default(uuid())
   name            String
   previewImageUrl String
-  visibility      TemplateVisibility @default(PUBLIC)
+  visibility      TemplateVisibility     @default(PUBLIC)
   pageData        Json
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
   creatorId       String
-  creator         User   @relation("TemplatesCreated", fields: [creatorId], references: [id], onDelete: Cascade)
+  creator         User                   @relation("TemplatesCreated", fields: [creatorId], references: [id], onDelete: Cascade)
   favoritedBy     UserFavoriteTemplate[]
   tags            Tag[]
 }
 
 model Tag {
-  id        String @id @default(uuid())
-  name      String @unique
+  id        String     @id @default(uuid())
+  name      String     @unique
   templates Template[]
 }
 
@@ -215,4 +246,3 @@ model LinkClick {
   country   String?
   referrer  String?
 }
-
