@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 const pageInclude = {
   links: { orderBy: { order: "asc" } as const },
   audios: { orderBy: { order: "asc" } as const },
+  blocks: { orderBy: { order: "asc" } as const },
   user: {
     select: {
       discordAvatarUrl: true,

@@ -17,6 +17,8 @@ const titleEffectsEnum = z.enum([
   "glitch",
 ]);
 
+const pageLayoutEnum = z.enum(["standard", "banner", "portrait"]);
+
 const updatePageBodySchema = z.object({
   slug: z
     .string()
@@ -101,6 +103,10 @@ const updatePageBodySchema = z.object({
     )
     .max(3, "Você pode ter no máximo 3 cores na borda.")
     .optional(),
+  showAudioPlayer: z.boolean().optional(),
+  showEmbeds: z.boolean().optional(),
+  isBodyGradient: z.boolean().optional(),
+  pageLayout: pageLayoutEnum.optional(),
 });
 
 export const updatePageSchema = {
