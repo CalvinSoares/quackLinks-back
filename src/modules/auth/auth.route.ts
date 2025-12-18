@@ -9,6 +9,7 @@ import jwt from "jsonwebtoken";
 
 import passport from "@fastify/passport";
 import { Strategy as SpotifyStrategy } from "passport-spotify";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 
 const authRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
@@ -38,6 +39,30 @@ const authRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     )
   );
 
+  passport.use(
+    "google",
+    new GoogleStrategy(
+      {
+        clientID: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        callbackURL: process.env.GOOGLE_CALLBACK_URL!,
+        scope: ["profile", "email"],
+      },
+      async (accessToken, refreshToken, profile, done) => {
+        try {
+          const profileWithToken = { ...profile, accessToken };
+
+          const user = await server.authService.findOrCreateGoogleUser(
+            profileWithToken
+          );
+          return done(null, user);
+        } catch (error) {
+          return done(error as Error);
+        }
+      }
+    )
+  );
+
   server.get("/discord", authController.discordLoginHandler);
   server.get(
     "/discord/callback",
@@ -58,6 +83,44 @@ const authRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         name: user.name,
         role: user.role,
       };
+      const token = jwt.sign(
+        payload,
+        process.env.JWT_SECRET || "super-secret-key-change-this-in-production",
+        { expiresIn: "7d" }
+      );
+
+      return reply.redirect(
+        `${process.env.FRONTEND_URL}/auth/callback?token=${token}`
+      );
+    }
+  );
+
+  server.get(
+    "/google",
+    passport.authenticate("google", { scope: ["profile", "email"] })
+  );
+
+  server.get(
+    "/google/callback",
+    {
+      preHandler: passport.authenticate("google", {
+        failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_login_failed`,
+      }),
+    },
+    async (request, reply) => {
+      if (!request.user) {
+        return reply.code(401).send({ message: "Não autorizado." });
+      }
+
+      const user = request.user as PrismaUser;
+
+      const payload = {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      };
+
       const token = jwt.sign(
         payload,
         process.env.JWT_SECRET || "super-secret-key-change-this-in-production",

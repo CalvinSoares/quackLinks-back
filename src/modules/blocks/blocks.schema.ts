@@ -10,6 +10,9 @@ const blockTypeEnum = z.enum([
   "SOCIAL",
   "IMAGE",
   "AUDIO",
+  "YOUTUBE_SUBSCRIBE",
+  "PINTEREST",
+  "COUNTDOWN",
 ]);
 
 // Criar Bloco

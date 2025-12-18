@@ -17,6 +17,15 @@ const titleEffectsEnum = z.enum([
   "glitch",
 ]);
 
+const linkStylesEnum = z.enum([
+  "classic",
+  "minimal",
+  "brutalist",
+  "spotlight",
+  "pixel", // <--- NOVO
+  "torn", // <--- NOVO
+]);
+
 const pageLayoutEnum = z.enum(["standard", "banner", "portrait"]);
 
 const updatePageBodySchema = z.object({
@@ -84,9 +93,14 @@ const updatePageBodySchema = z.object({
     .nullable(),
   profileCardOpacity: z.number().min(0).max(1).optional(),
   showViewCount: z.boolean().optional(),
-  linkStyle: z
-    .enum(["classic", "minimal", "brutalist", "spotlight"])
-    .optional(),
+  buttonColor: z
+    .string()
+    .regex(/^#([0-9a-f]{3}){1,2}$/i, {
+      message: "Cor do botão inválida.",
+    })
+    .optional()
+    .nullable(),
+  linkStyle: linkStylesEnum.optional(),
   layoutLinkStyle: z.enum(["list", "grid", "icons_only", "stacked"]).optional(),
   titleEffect: titleEffectsEnum.optional(),
 

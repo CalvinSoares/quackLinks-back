@@ -19,7 +19,7 @@ const pageRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
 
   server.register(async (privateRoutes) => {
     privateRoutes.addHook("preHandler", authenticateJwt);
-
+    privateRoutes.get("/list", pageController.getMyPagesHandler);
     privateRoutes.get("/my-page", pageController.getMyPageHandler);
 
     privateRoutes.put(
@@ -27,6 +27,9 @@ const pageRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       { schema: updatePageSchema },
       pageController.updateMyPageHandler
     );
+
+    privateRoutes.post("/", pageController.createPageHandler);
+    privateRoutes.delete("/:id", pageController.deletePageHandler);
   });
 };
 

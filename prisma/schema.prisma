@@ -27,6 +27,9 @@ enum BlockType {
   SOCIAL
   IMAGE
   AUDIO
+  YOUTUBE_SUBSCRIBE
+  PINTEREST
+  COUNTDOWN
 }
 
 model Account {
@@ -60,11 +63,15 @@ model User {
 
   stripeCustomerId String? @unique
 
-  emailVerified    DateTime?
-  discordAvatarUrl String?
-  useDiscordAvatar Boolean   @default(true)
+  emailVerified DateTime?
+  image         String?
 
-  Page Page?
+  imageProvider String @default("LOCAL")
+
+  discordImage String?
+  googleImage  String?
+
+  pages Page[]
 
   accounts          Account[]
   templatesCreated  Template[]             @relation("TemplatesCreated")
@@ -91,55 +98,57 @@ model Block {
 }
 
 model Page {
-  id                    String     @id @default(uuid())
-  slug                  String     @unique
+  id                    String  @id @default(uuid())
+  slug                  String  @unique
   title                 String?
   bio                   String?
   avatarUrl             String?
-  showProfileCard       Boolean    @default(true)
+  showProfileCard       Boolean @default(true)
   profileCardColor      String?
-  profileCardOpacity    Float      @default(0.2)
-  useStandardIconColors Boolean    @default(true)
-  glowEffect            String     @default("none")
-  showViewCount         Boolean    @default(true)
-  buttonStyle           String     @default("solid")
-  buttonRoundness       String     @default("rounded-lg")
-  buttonShadow          Boolean    @default(false)
-  layoutType            String     @default("standard")
-  pageLayout            String     @default("standard")
-  linkStyle             String     @default("classic")
-  layoutLinkStyle       String     @default("list")
-  backgroundOverlay     String?
-  backgroundBlur        Int        @default(0)
-  customCss             String?    @db.Text
-  backgroundType        String     @default("solid")
-  titleEffect           String     @default("none")
-  gradientDirection     String?
-  gradientColorA        String?
-  gradientColorB        String?
-  backgroundUrl         String?
-  backgroundVideoUrl    String?
-  backgroundColor       String?
-  location              String?
-  cursorUrl             String?
-  shuffleAudios         Boolean    @default(false)
-  showAudioPlayer       Boolean    @default(true)
-  showEmbeds            Boolean    @default(true)
-  showAudioButton       Boolean    @default(true)
-  textColor             String?
-  iconColor             String?
-  profileRingType       String?    @default("none")
-  profileRingColors     String[]   @default([])
-  theme                 String     @default("default")
-  viewCount             Int        @default(0)
-  createdAt             DateTime   @default(now())
-  updatedAt             DateTime   @updatedAt
-  userId                String     @unique
-  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  links                 Link[]
-  PageView              PageView[]
-  audios                Audio[]
-  blocks                Block[]
+  profileCardOpacity    Float   @default(0.2)
+  useStandardIconColors Boolean @default(true)
+  glowEffect            String  @default("none")
+  showViewCount         Boolean @default(true)
+  buttonStyle           String  @default("solid")
+
+  buttonColor        String?
+  buttonRoundness    String     @default("rounded-lg")
+  buttonShadow       Boolean    @default(false)
+  layoutType         String     @default("standard")
+  pageLayout         String     @default("standard")
+  linkStyle          String     @default("classic")
+  layoutLinkStyle    String     @default("list")
+  backgroundOverlay  String?
+  backgroundBlur     Int        @default(0)
+  customCss          String?    @db.Text
+  backgroundType     String     @default("solid")
+  titleEffect        String     @default("none")
+  gradientDirection  String?
+  gradientColorA     String?
+  gradientColorB     String?
+  backgroundUrl      String?
+  backgroundVideoUrl String?
+  backgroundColor    String?
+  location           String?
+  cursorUrl          String?
+  shuffleAudios      Boolean    @default(false)
+  showAudioPlayer    Boolean    @default(true)
+  showEmbeds         Boolean    @default(true)
+  showAudioButton    Boolean    @default(true)
+  textColor          String?
+  iconColor          String?
+  profileRingType    String?    @default("none")
+  profileRingColors  String[]   @default([])
+  theme              String     @default("default")
+  viewCount          Int        @default(0)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  userId             String
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links              Link[]
+  PageView           PageView[]
+  audios             Audio[]
+  blocks             Block[]
 }
 
 model Audio {
