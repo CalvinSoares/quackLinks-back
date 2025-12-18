@@ -36,45 +36,6 @@ export class AuthController {
     return reply.redirect(discordAuthUrl.toString());
   };
 
-  discordCallbackHandler = async (
-    request: FastifyRequest<{ Querystring: { code: string } }>,
-    reply: FastifyReply
-  ) => {
-    const { code } = request.query;
-    if (!code) {
-      return reply.redirect(
-        `${process.env.FRONTEND_URL}/login?error=discord_login_failed`
-      );
-    }
-
-    try {
-      const { user } = await this.authService.handleDiscordCallback(code);
-
-      const payload = {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-      };
-      const token = jwt.sign(
-        payload,
-        process.env.JWT_SECRET || "super-secret-key-change-this-in-production",
-        { expiresIn: "7d" }
-      );
-
-      await request.logIn(user);
-
-      return reply.redirect(
-        `${process.env.FRONTEND_URL}/auth/callback?token=${token}`
-      );
-    } catch (error) {
-      console.error("Discord callback error:", error);
-      return reply.redirect(
-        `${process.env.FRONTEND_URL}/login?error=discord_login_failed`
-      );
-    }
-  };
-
   registerHandler = async (
     request: FastifyRequest<{ Body: RegisterUserInput }>,
     reply: FastifyReply

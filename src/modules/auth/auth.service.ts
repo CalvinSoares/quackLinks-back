@@ -1,6 +1,6 @@
 import { User } from "@prisma/client";
 import bcrypt from "bcrypt";
-import axios from "axios";
+
 import {
   EmailInUseError,
   IncorrectPasswordError,
@@ -22,18 +22,6 @@ export class InvalidTokenError extends Error {
   constructor() {
     super("Código inválido ou expirado.");
   }
-}
-
-interface DiscordTokenResponse {
-  access_token: string;
-}
-
-interface DiscordUserResponse {
-  id: string;
-  username: string;
-  avatar: string | null;
-  email: string | null;
-  verified: boolean;
 }
 
 function getDiscordAvatarUrl(
@@ -106,27 +94,57 @@ export class AuthService {
     await this.authRepository.deleteVerificationToken(verificationToken.id);
   }
 
+  private determineProfileImage(
+    currentImage: string | null,
+    currentProvider: string,
+    newProvider: string,
+    newImageUrl: string | null
+  ): { image: string | null; imageProvider: string } {
+    if (!currentImage) {
+      return { image: newImageUrl, imageProvider: newProvider };
+    }
+
+    if (currentProvider === newProvider) {
+      return { image: newImageUrl, imageProvider: newProvider };
+    }
+
+    return { image: currentImage, imageProvider: currentProvider };
+  }
+
   async findOrCreateDiscordUser(profile: any): Promise<User> {
     const discordEmail = profile.email;
     if (!discordEmail) {
       throw new Error("Não foi possível obter o e-mail do Discord.");
     }
 
+    const discordAvatar = getDiscordAvatarUrl(profile.id, profile.avatar);
+
     let user = await this.userRepository.findByEmail(discordEmail);
 
     if (user) {
-      // Se o usuário já existe, atualizamos o avatar
+      // Atualiza cache e verifica principal
+      const { image, imageProvider } = this.determineProfileImage(
+        user.image,
+        user.imageProvider,
+        "DISCORD",
+        discordAvatar
+      );
+
       await this.userRepository.update(user.id, {
-        discordAvatarUrl: getDiscordAvatarUrl(profile.id, profile.avatar),
+        discordImage: discordAvatar, // Novo campo de cache
+        image,
+        imageProvider,
       });
     } else {
-      user = await this.userRepository.create({
+      const newUser = await this.userRepository.create({
         email: discordEmail,
         name: profile.username,
-        emailVerified: new Date(), // E-mail do Discord é considerado verificado
-        discordAvatarUrl: getDiscordAvatarUrl(profile.id, profile.avatar),
+        emailVerified: new Date(),
+        image: discordAvatar,
+        imageProvider: "DISCORD",
+        discordImage: discordAvatar,
       });
-      // Lembre-se de adicionar a lógica para criar a página padrão para o novo usuário aqui, se necessário.
+      user = (await this.userRepository.findFullUserById(newUser.id))!;
     }
 
     // Garante que a conta OAuth está vinculada ao nosso usuário
@@ -141,82 +159,49 @@ export class AuthService {
     return user;
   }
 
-  async handleDiscordCallback(
-    code: string
-  ): Promise<{ user: User; isNewUser: boolean }> {
-    const tokenParams = new URLSearchParams({
-      client_id: process.env.DISCORD_CLIENT_ID!,
-      client_secret: process.env.DISCORD_CLIENT_SECRET!,
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: process.env.DISCORD_REDIRECT_URI!,
-    });
+  async findOrCreateGoogleUser(profile: any): Promise<User> {
+    const googleEmail = profile.emails?.[0]?.value;
+    const googleAvatar = profile.photos?.[0]?.value || null;
 
-    const tokenRes = await axios.post<DiscordTokenResponse>(
-      "https://discord.com/api/oauth2/token",
-      tokenParams,
-      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
-    );
-    const accessToken = tokenRes.data.access_token;
+    if (!googleEmail) throw new Error("E-mail do Google não encontrado.");
 
-    const userRes = await axios.get<DiscordUserResponse>(
-      "https://discord.com/api/users/@me",
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
+    let user = await this.userRepository.findByEmail(googleEmail);
 
-    const discordUser = userRes.data;
+    if (user) {
+      // Usuário existe: Atualiza o cache do Google e verifica se deve mudar a foto principal
+      const { image, imageProvider } = this.determineProfileImage(
+        user.image,
+        user.imageProvider,
+        "GOOGLE",
+        googleAvatar
+      );
 
-    const discordAvatarUrl = getDiscordAvatarUrl(
-      discordUser.id,
-      discordUser.avatar
-    );
-
-    const account = await this.accountRepository.findByProviderAccountId(
-      "discord",
-      discordUser.id
-    );
-
-    let user: User;
-    let isNewUser = false;
-
-    if (account) {
-      user = account.user;
-
-      await this.userRepository.update(user.id, { discordAvatarUrl });
-    } else {
-      isNewUser = true;
-      let existingUser: User | null = null;
-
-      if (discordUser.email && discordUser.verified) {
-        existingUser = await this.userRepository.findByEmail(discordUser.email);
-      }
-
-      if (existingUser) {
-        user = existingUser;
-      } else {
-        const newPublicUser = await this.userRepository.create({
-          name: discordUser.username,
-          email:
-            discordUser.email && discordUser.verified
-              ? discordUser.email
-              : null,
-          emailVerified:
-            discordUser.email && discordUser.verified ? new Date() : null,
-          discordAvatarUrl: discordAvatarUrl,
-        });
-
-        user = (await this.userRepository.findFullUserById(newPublicUser.id))!;
-      }
-
-      await this.accountRepository.create({
-        userId: user.id,
-        type: "oauth",
-        provider: "discord",
-        providerAccountId: discordUser.id,
-        accessToken,
+      await this.userRepository.update(user.id, {
+        googleImage: googleAvatar,
+        image,
+        imageProvider,
       });
+    } else {
+      // Novo usuário: Já nasce com a foto do Google
+      const newUser = await this.userRepository.create({
+        name: profile.displayName,
+        email: googleEmail,
+        emailVerified: new Date(),
+        image: googleAvatar,
+        imageProvider: "GOOGLE",
+        googleImage: googleAvatar,
+      });
+      user = (await this.userRepository.findFullUserById(newUser.id))!;
     }
 
-    return { user, isNewUser };
+    // Link da Account
+    await this.accountRepository.createOrUpdate({
+      provider: "google",
+      providerAccountId: profile.id,
+      userId: user.id,
+      accessToken: profile.accessToken,
+    });
+
+    return user;
   }
 }

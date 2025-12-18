@@ -23,11 +23,11 @@ async function setupCustomDomainRouting(server: FastifyInstance) {
     try {
       const customDomain = await server.prisma.customDomain.findUnique({
         where: { domain: hostname, verified: true },
-        include: { user: { include: { Page: true } } },
+        include: { user: { include: { pages: true } } },
       });
 
-      if (customDomain && customDomain.user.Page) {
-        request.raw.url = `/${customDomain.user.Page.slug}`;
+      if (customDomain && customDomain.user.pages) {
+        request.raw.url = `/${customDomain.user.pages[0].slug}`;
       } else {
         reply
           .code(404)

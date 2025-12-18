@@ -14,6 +14,19 @@ export class PageController {
     private analyticsService: AnalyticsService
   ) {}
 
+  getMyPagesHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+    const { page, search } = req.query as { page?: string; search?: string };
+    const user = req.user as PrismaUser;
+
+    const result = await this.pageService.getUserPages(
+      user.id,
+      Number(page) || 1,
+      10,
+      search || ""
+    );
+    return result;
+  };
+
   getPageBySlugHandler = async (
     req: FastifyRequest<{ Params: { slug: string } }>,
     reply: FastifyReply
@@ -68,6 +81,38 @@ export class PageController {
       return reply
         .code(500)
         .send({ message: "Não foi possível atualizar a página." });
+    }
+  };
+
+  // POST /my-pages
+  createPageHandler = async (
+    req: FastifyRequest<{ Body: { title: string; slug: string } }>,
+    reply: FastifyReply
+  ) => {
+    const user = req.user as PrismaUser;
+    try {
+      const newPage = await this.pageService.createPage(
+        user.id,
+        req.body.title,
+        req.body.slug
+      );
+      return reply.code(201).send(newPage);
+    } catch (e: any) {
+      return reply.code(400).send({ message: e.message });
+    }
+  };
+
+  // DELETE /my-pages/:id
+  deletePageHandler = async (
+    req: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply
+  ) => {
+    const user = req.user as PrismaUser;
+    try {
+      await this.pageService.deletePage(user.id, req.params.id);
+      return reply.code(204).send();
+    } catch (e: any) {
+      return reply.code(400).send({ message: e.message });
     }
   };
 }

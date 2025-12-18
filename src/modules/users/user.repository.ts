@@ -6,10 +6,19 @@ const publicUserSelect = {
   name: true,
   createdAt: true,
   updatedAt: true,
-  useDiscordAvatar: true,
-  discordAvatarUrl: true,
+  image: true,
+  imageProvider: true,
+  discordImage: true,
+  googleImage: true,
   role: true,
   stripeCustomerId: true,
+
+  accounts: {
+    select: {
+      id: true,
+      provider: true,
+    },
+  },
 };
 
 export type PublicUser = Prisma.UserGetPayload<{
@@ -78,6 +87,10 @@ export class UserRepository implements IUserRepository {
   }
 
   async deleteDiscordAccount(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    const shouldResetImage = user?.imageProvider === "DISCORD";
+
     await this.prisma.$transaction([
       this.prisma.account.deleteMany({
         where: { userId, provider: "discord" },
@@ -85,8 +98,12 @@ export class UserRepository implements IUserRepository {
       this.prisma.user.update({
         where: { id: userId },
         data: {
-          discordAvatarUrl: null,
-          useDiscordAvatar: false,
+          discordImage: null,
+
+          ...(shouldResetImage && {
+            image: null,
+            imageProvider: "LOCAL",
+          }),
         },
       }),
     ]);
